@@ -1,4 +1,5 @@
 #include "pedigree-internal.h"
+#include <cstddef>
 
 // External pedigree library code.  Linking this code with a Cilk program
 // enables pedigrees.
@@ -12,7 +13,8 @@ CHEETAH_INTERNAL
 __pedigree_frame root_frame = {.pedigree = {.rank = 0, .parent = nullptr},
                                .rank = 0,
                                .dprng_dotproduct = 0,
-                               .dprng_depth = 0};
+                               .dprng_depth = 0,
+                                .label={}};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialization and deinitialization
@@ -82,11 +84,12 @@ uint64_t __cilkrts_get_dprand(void) noexcept {
 
 // Get the current os_label, in the form of a pointer to its leaf node.
 __cilkrts_os_label __cilkrts_get_os_label(void) noexcept {
-    __cilkrts_os_label ret_ped;
     __pedigree_frame *frame = (__pedigree_frame *)(__cilkrts_get_extension());
     //ret_ped.parent = &(frame->pedigree);
-    ret_ped.parent = nullptr;
-    ret_ped.label = frame->label;
+    __cilkrts_os_label ret_ped{.label=frame->label, .parent=nullptr};
+    //ret_ped.parent = nullptr;
+
+    //ret_ped.label = &frame->label;
     return ret_ped;
 }
 

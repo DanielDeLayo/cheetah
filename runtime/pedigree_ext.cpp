@@ -33,14 +33,28 @@ void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
     parent_frame->dprng_dotproduct = __cilkrts_dprng_sum_mod_p(
         parent_dprng_dotproduct,
         __pedigree_dprng_m_array[parent_frame->dprng_depth]);
+
+    // Update the labels in the parent and child frames.
+    //frame->label.append_right_child();
+    //parent_frame->label.append_left_child();
 }
 
 // TODO: Remove extension parameter?
 void __cilkrts_extend_return_from_spawn(__cilkrts_worker *w,
                                         [[maybe_unused]] void **extension) {
-    // Free the pedigree frame.
+    // Free the pedigree frame.    
     pop_pedigree_frame(w);
+                                           
 }
+
+void __cilkrts_extend_leave_frame(__cilkrts_worker *w,
+                                        [[maybe_unused]] void **extension) {
+    // Free the pedigree frame.    
+    __pedigree_frame *frame = (__pedigree_frame *)(*extension);
+    //frame->label.join_left_child();
+    //std::cout << frame->label << std::endl;
+}
+
 
 void __cilkrts_extend_sync(void **extension) {
     // Update the rank and dprng_dotproduct.
@@ -49,3 +63,4 @@ void __cilkrts_extend_sync(void **extension) {
     frame->dprng_dotproduct = __cilkrts_dprng_sum_mod_p(
         frame->dprng_dotproduct, __pedigree_dprng_m_array[frame->dprng_depth]);
 }
+

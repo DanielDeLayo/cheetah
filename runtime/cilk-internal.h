@@ -80,6 +80,7 @@ void *__cilkrts_get_extension(void);
 void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
                             void **child_extension);
 void __cilkrts_extend_return_from_spawn(__cilkrts_worker *w, void **extension);
+void __cilkrts_extend_leave_frame(__cilkrts_worker *w, void **extension);
 void __cilkrts_extend_sync(void **extension);
 
 static inline __attribute__((always_inline)) void *

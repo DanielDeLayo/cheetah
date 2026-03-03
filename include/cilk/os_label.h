@@ -4,7 +4,7 @@
 //#include "codes.h"
 #include <iostream>
 
-constexpr size_t __code_max_length = 512;
+constexpr size_t __code_max_length = 8 * 1024;
 constexpr size_t __code_nbytes = __code_max_length/8;
 
 using bitset = uint8_t[__code_nbytes];
@@ -14,9 +14,11 @@ class os_label
   bitset labels = {0};
   size_t offset = 0;
 
+public:
   //Encoding: offset-span labeling DOI:10.1145/125826.125861
 
   void append_left_child()
+
   {
     labels[++offset] = 0;
   }
@@ -26,8 +28,11 @@ class os_label
     labels[++offset] = 1;
   }
 
-  void after_join()
+  void join_left_child()
   {
+    // Clear left child
+    labels[offset--] = 0;
+    // Increment Parent
     labels[offset] += 2;
   }
 

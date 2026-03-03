@@ -24,7 +24,7 @@ typedef struct __cilkrts_pedigree {
     struct __cilkrts_pedigree *parent;
 } __cilkrts_pedigree;
 typedef struct __cilkrts_os_label {
-    os_label label;
+    os_label& label;
     struct __cilkrts_os_label *parent;
 } __cilkrts_os_label;
 __cilkrts_pedigree __cilkrts_get_pedigree(void) __CILKRTS_NOTHROW;

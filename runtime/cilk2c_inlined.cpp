@@ -254,6 +254,10 @@ __cilkrts_leave_frame(__cilkrts_stack_frame *sf) {
 
     __cilkrts_stack_frame *parent = sf->call_parent;
 
+    if (USE_EXTENSION) {
+        __cilkrts_extend_leave_frame(w, &w->extension);
+    }
+
     // Pop this frame off the cactus stack.  This logic used to be in
     // __cilkrts_pop_frame, but has been manually inlined to avoid reloading the
     // worker unnecessarily.
