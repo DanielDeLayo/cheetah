@@ -2,6 +2,7 @@
 #define _CILK_API_H
 
 #include <stddef.h> /* size_t */
+#include "os_label.h"
 
 #ifdef __cplusplus
 #define __CILKRTS_NOTHROW noexcept
@@ -22,7 +23,12 @@ typedef struct __cilkrts_pedigree {
     uint64_t rank;
     struct __cilkrts_pedigree *parent;
 } __cilkrts_pedigree;
+typedef struct __cilkrts_os_label {
+    os_label label;
+    struct __cilkrts_os_label *parent;
+} __cilkrts_os_label;
 __cilkrts_pedigree __cilkrts_get_pedigree(void) __CILKRTS_NOTHROW;
+__cilkrts_os_label __cilkrts_get_os_label(void) __CILKRTS_NOTHROW;
 void __cilkrts_bump_worker_rank(void) __CILKRTS_NOTHROW;
 void __cilkrts_dprand_set_seed(uint64_t seed) __CILKRTS_NOTHROW;
 void __cilkrts_init_dprng(void) __CILKRTS_NOTHROW;

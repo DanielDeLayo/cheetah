@@ -3,6 +3,7 @@
 
 #include "cilk-internal.h"
 #include <cilk/cilk_api.h>
+#include <cilk/os_label.h>
 #include <cstdlib>
 
 static const uint64_t DPRNG_PRIME = (uint64_t)(-59);
@@ -14,6 +15,7 @@ typedef struct __pedigree_frame {
     int64_t rank;
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
+    os_label label;
 } __pedigree_frame;
 
 ///////////////////////////////////////////////////////////////////////////

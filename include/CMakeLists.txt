@@ -1,6 +1,7 @@
 set(cilk_header_files
   cilk/cilk.h
   cilk/cilk_api.h
+  cilk/os_label.h
   cilk/cilk_stub.h
   cilk/holder
   cilk/opadd_reducer

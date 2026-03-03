@@ -80,6 +80,16 @@ uint64_t __cilkrts_get_dprand(void) noexcept {
     return __cilkrts_dprng_mix_mod_p(frame->dprng_dotproduct);
 }
 
+// Get the current os_label, in the form of a pointer to its leaf node.
+__cilkrts_os_label __cilkrts_get_os_label(void) noexcept {
+    __cilkrts_os_label ret_ped;
+    __pedigree_frame *frame = (__pedigree_frame *)(__cilkrts_get_extension());
+    //ret_ped.parent = &(frame->pedigree);
+    ret_ped.parent = nullptr;
+    ret_ped.label = frame->label;
+    return ret_ped;
+}
+
 // Get the current pedigree, in the form of a pointer to its leaf node.
 __cilkrts_pedigree __cilkrts_get_pedigree(void) noexcept {
     __cilkrts_pedigree ret_ped;
