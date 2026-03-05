@@ -145,6 +145,13 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) noexcept {
     sf->call_parent = fh->current_stack_frame;
     fh->current_stack_frame = sf;
 
+        
+    if (USE_EXTENSION) {
+        __cilkrts_worker *w = get_worker_from_stack(sf);
+        __cilkrts_extend_enter_frame(w, &w->extension);
+    }
+
+    
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
 }
 
@@ -166,6 +173,11 @@ __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
     if (spawner) {
         sf->call_parent = parent;
         fh->current_stack_frame = sf;
+    }
+
+    if (USE_EXTENSION) {
+        __cilkrts_worker *w = get_worker_from_stack(sf);
+        __cilkrts_extend_enter_frame_helper(w, &w->extension);
     }
 }
 
@@ -216,6 +228,10 @@ __attribute__((always_inline)) void __cilk_sync(__cilkrts_stack_frame *sf) {
                     __cilkrts_check_exception_raise(sf);
                 }
             }
+            if (USE_EXTENSION) {
+                __cilkrts_worker *w = get_worker_from_stack(sf);
+                __cilkrts_extend_real_sync(&w->extension);
+            }
         }
         if (USE_EXTENSION) {
             __cilkrts_worker *w = get_worker_from_stack(sf);
@@ -234,6 +250,10 @@ __cilk_sync_nothrow(__cilkrts_stack_frame *sf) {
             } else {
                 sanitizer_finish_switch_fiber();
                 __cilkrts_do_reductions(sf);
+            }
+            if (USE_EXTENSION) {
+                __cilkrts_worker *w = get_worker_from_stack(sf);
+                __cilkrts_extend_real_sync(&w->extension);
             }
         }
         if (USE_EXTENSION) {
@@ -349,6 +369,11 @@ void __cilkrts_enter_landingpad(__cilkrts_stack_frame *sf, int32_t sel) {
         return;
 
     sf->fh->current_stack_frame = sf;
+
+    if (USE_EXTENSION) {
+        __cilkrts_worker *w = get_worker_from_stack(sf);
+        __cilkrts_extend_landingpad(w, &w->extension);
+    }
 
     // Don't do anything special during cleanups.
     if (sel == 0)

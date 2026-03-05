@@ -35,6 +35,7 @@ public:
     // Increment Parent
     labels[offset] += 2;
   }
+  
 
   // Returns true if in parallel
   bool operator||(const os_label&& rhs) const
