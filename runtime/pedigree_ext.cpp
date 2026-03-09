@@ -45,6 +45,7 @@ void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
     frame->label = parent_frame->label;
     frame->label.append_right_child();
     parent_frame->label.append_left_child();
+    //parent_frame->label.join_left_child();
 
     //std::cout << "PARENT2: " << parent_frame->label << std::endl;
     //std::cout << "CHILD2: " << frame->label << std::endl;
@@ -54,7 +55,7 @@ void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
 void __cilkrts_extend_return_from_spawn(__cilkrts_worker *w,
                                         [[maybe_unused]] void **extension) {
     
-    std::cout << "POP: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "POP: " << ((__pedigree_frame*)(*extension))->label << std::endl;
     // Free the pedigree frame.    
     pop_pedigree_frame(w);
                                            
@@ -65,8 +66,11 @@ void __cilkrts_extend_leave_frame(__cilkrts_worker *w,
     // Free the pedigree frame.    
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
     //frame->label.join_left_child();
-    std::cout << "LEAVE: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "LEAVE: " << ((__pedigree_frame*)(*extension))->label << std::endl;
     //std::cout << frame->label << std::endl;
+
+    //__cilkrts_extend_label_sync(extension);
+
 }
 
 void __cilkrts_extend_enter_frame(__cilkrts_worker *w,
@@ -74,7 +78,7 @@ void __cilkrts_extend_enter_frame(__cilkrts_worker *w,
     // Free the pedigree frame.    
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
     //frame->label.join_left_child();
-    std::cout << "ENTER: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "ENTER: " << ((__pedigree_frame*)(*extension))->label << std::endl;
     //std::cout << frame->label << std::endl;
 }
 
@@ -83,7 +87,7 @@ void __cilkrts_extend_landingpad(__cilkrts_worker *w,
     // Free the pedigree frame.    
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
     //frame->label.join_left_child();
-    std::cout << "LAND: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "LAND: " << ((__pedigree_frame*)(*extension))->label << std::endl;
     //std::cout << frame->label << std::endl;
 }
 
@@ -92,7 +96,7 @@ void __cilkrts_extend_enter_frame_helper(__cilkrts_worker *w,
     // Free the pedigree frame.    
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
     //frame->label.join_left_child();
-    std::cout << "ENTER HELPER: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "ENTER HELPER: " << ((__pedigree_frame*)(*extension))->label << std::endl;
     //std::cout << frame->label << std::endl;
 }
 
@@ -104,14 +108,14 @@ void __cilkrts_extend_sync(void **extension) {
     frame->rank++;
     frame->dprng_dotproduct = __cilkrts_dprng_sum_mod_p(
         frame->dprng_dotproduct, __pedigree_dprng_m_array[frame->dprng_depth]);
-    std::cout << "SYNC: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    frame->label.restore_on_sync();
+    std::cout << "SYNC1: " << ((__pedigree_frame*)(*extension))->label << std::endl;
 }
 
-void __cilkrts_extend_real_sync(void **extension) {
+void __cilkrts_extend_label_sync(void **extension) {
     // Update the rank and dprng_dotproduct.
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
-    std::cout << "REAL FROM: " << ((__pedigree_frame*)(*extension))->label << std::endl;
-    frame->label.join_left_child();
-    std::cout << "REAL TO. : " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //frame->label.restore_on_sync();
+    std::cout << "SYNC2: " << ((__pedigree_frame*)(*extension))->label << std::endl;
 }
 

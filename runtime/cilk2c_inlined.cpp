@@ -230,7 +230,7 @@ __attribute__((always_inline)) void __cilk_sync(__cilkrts_stack_frame *sf) {
             }
             if (USE_EXTENSION) {
                 __cilkrts_worker *w = get_worker_from_stack(sf);
-                __cilkrts_extend_real_sync(&w->extension);
+                __cilkrts_extend_label_sync(&w->extension);
             }
         }
         if (USE_EXTENSION) {
@@ -253,7 +253,7 @@ __cilk_sync_nothrow(__cilkrts_stack_frame *sf) {
             }
             if (USE_EXTENSION) {
                 __cilkrts_worker *w = get_worker_from_stack(sf);
-                __cilkrts_extend_real_sync(&w->extension);
+                __cilkrts_extend_label_sync(&w->extension);
             }
         }
         if (USE_EXTENSION) {

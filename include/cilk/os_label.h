@@ -2,6 +2,7 @@
 #define _OS_LABEL_H
 
 //#include "codes.h"
+#include <cstddef>
 #include <iostream>
 
 constexpr size_t __code_max_length = 8 * 1024;
@@ -13,14 +14,16 @@ class os_label
 {
   bitset labels = {0};
   size_t offset = 0;
+  // Store a count of continuations to remove on sync
+  size_t conts = 0;
 
 public:
   //Encoding: offset-span labeling DOI:10.1145/125826.125861
 
   void append_left_child()
-
   {
     labels[++offset] = 0;
+    ++conts;
   }
 
   void append_right_child()
@@ -28,14 +31,15 @@ public:
     labels[++offset] = 1;
   }
 
-  void join_left_child()
+  void restore_on_sync()
   {
+    //if (conts == 0) return;
     // Clear left child
-    labels[offset--] = 0;
+    for(; conts > 0; conts--)
+      labels[offset--] = 0;
     // Increment Parent
     labels[offset] += 2;
   }
-  
 
   // Returns true if in parallel
   bool operator||(const os_label&& rhs) const
