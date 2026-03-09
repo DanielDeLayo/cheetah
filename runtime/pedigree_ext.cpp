@@ -109,13 +109,13 @@ void __cilkrts_extend_sync(void **extension) {
     frame->dprng_dotproduct = __cilkrts_dprng_sum_mod_p(
         frame->dprng_dotproduct, __pedigree_dprng_m_array[frame->dprng_depth]);
     frame->label.restore_on_sync();
-    std::cout << "SYNC1: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "SYNC1: " << ((__pedigree_frame*)(*extension))->label << std::endl;
 }
 
 void __cilkrts_extend_label_sync(void **extension) {
     // Update the rank and dprng_dotproduct.
     __pedigree_frame *frame = (__pedigree_frame *)(*extension);
     //frame->label.restore_on_sync();
-    std::cout << "SYNC2: " << ((__pedigree_frame*)(*extension))->label << std::endl;
+    //std::cout << "SYNC2: " << ((__pedigree_frame*)(*extension))->label << std::endl;
 }
 
