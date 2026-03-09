@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <iostream>
 
-constexpr size_t __code_max_length = 8 * 1024;
+constexpr size_t __code_max_length = 8 * 64;
 constexpr size_t __code_nbytes = __code_max_length/8;
 
 using bitset = uint8_t[__code_nbytes];
