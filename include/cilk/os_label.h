@@ -3,22 +3,27 @@
 
 //#include "codes.h"
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 
-constexpr size_t __code_max_length = 8 * 64;
+constexpr size_t __code_max_length = 10 * 64;
 constexpr size_t __code_nbytes = __code_max_length/8;
 
 using bitset = uint8_t[__code_nbytes];
 
+#pragma pack(push, 1)
 class os_label
 {
   bitset labels = {0};
-  size_t offset = 0;
+  uint8_t offset = 0;
+  uint8_t conts = 0;
   // Store a count of continuations to remove on sync
-  size_t conts = 0;
+ 
 
 public:
-  //Encoding: offset-span labeling DOI:10.1145/125826.125861
+  // Encoding: offset-span labeling DOI:10.1145/125826.125861
+  // TODO: 2 value bits, 1 child-direction bit, and 1 continuation bit
+  // TODO: Gray code stuff? Right align, grow left, etc.
 
   void append_left_child()
   {
@@ -42,7 +47,7 @@ public:
   }
 
   // Returns true if in parallel
-  bool operator||(const os_label&& rhs) const
+  bool is_parallel(const os_label& rhs) const
   {
     // 4 cases:
     // 1. No LCA-- series
@@ -76,6 +81,7 @@ public:
   inline friend std::ostream& operator<<(std::ostream& os, const os_label& l);
 
 };
+#pragma pack(pop)
 
 inline std::ostream& operator<<(std::ostream& os, const os_label& l) {
     os << "Length: " << l.offset+1 << ", Label:";
