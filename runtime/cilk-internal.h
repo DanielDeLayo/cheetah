@@ -80,13 +80,7 @@ void *__cilkrts_get_extension(void);
 void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
                             void **child_extension);
 void __cilkrts_extend_return_from_spawn(__cilkrts_worker *w, void **extension);
-void __cilkrts_extend_leave_frame(__cilkrts_worker *w, void **extension);
-void __cilkrts_extend_leave_frame_helper(__cilkrts_worker *w, void **extension);
-void __cilkrts_extend_enter_frame(__cilkrts_worker *w, void **extension);
-void __cilkrts_extend_enter_frame_helper(__cilkrts_worker *w, void **extension);
-void __cilkrts_extend_landingpad(__cilkrts_worker *w, void **extension);
 void __cilkrts_extend_sync(void **extension);
-void __cilkrts_extend_label_sync(void **extension);
 
 static inline __attribute__((always_inline)) void *
 __cilkrts_push_ext_stack(__cilkrts_worker *w, size_t size) {

@@ -1,8 +1,8 @@
 #ifndef _CILK_API_H
 #define _CILK_API_H
 
-#include <stddef.h> /* size_t */
 #include "os_label.h"
+#include <stddef.h> /* size_t */
 
 #ifdef __cplusplus
 #define __CILKRTS_NOTHROW noexcept

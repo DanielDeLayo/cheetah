@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <iostream>
 
-constexpr size_t __code_max_length = 10 * 64;
+constexpr size_t __code_max_length = 32 * 64;
 constexpr size_t __code_nbytes = __code_max_length/8;
 
 using bitset = uint8_t[__code_nbytes];
