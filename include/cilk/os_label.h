@@ -49,7 +49,7 @@ class atomic_seqlock
   {
     uint32_t ret;
     // Might as well wait until we've got an even number
-    while((ret = has_writer.load()) % 2 == 1);
+    while((ret = seq.load()) % 2 == 1);
     return ret;
   }
 
