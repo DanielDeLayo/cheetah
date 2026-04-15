@@ -16,7 +16,7 @@ using bitset = uint8_t[__code_nbytes];
 
 // Represents your status reletive to the other label.
 // Either you've synced since them, you're within the range, or your're simply in parallel
-enum range_check {synced, within, parallel};
+enum range_check {synced, within, parallel, identical};
 
 
 #pragma pack(push, 1)
@@ -118,7 +118,7 @@ public:
     size_t num_matches = calc_matching_prefix_length(rhs);
 
     // Cases 1, 2, and 4. Offsets are indices of the last elements
-    if (num_matches == 0 || num_matches == offset+1 || num_matches == rhs.offset+1)
+    if (num_matches == 0 || num_matches == offset || num_matches == rhs.offset)
       return false;
 
     // Case 3: The tricky one.
@@ -134,7 +134,7 @@ public:
   }
 
   // Should fixup LCA range?
-  range_check should_update_range(const os_label& rhs) const
+  range_check range_relation(const os_label& rhs, const bool& is_range) const
   {
     // This function handles multiple cases
     // 1. We have synced since the rhs label
@@ -142,9 +142,12 @@ public:
     // 3. We are in parallel with the rhs label but outside the range
     size_t num_matches = calc_matching_prefix_length(rhs);
     
+    // Case 1: same
+    if (num_matches == offset && offset == rhs.offset)
+      return identical;
     // Case 2: descendent
-    if (num_matches == offset+1 || num_matches == rhs.offset+1)
-      return within;
+    if (num_matches == offset || num_matches == rhs.offset)
+      return is_range ? within : synced;
     // Case 3: parallel
     if (is_parallel(rhs))
       return parallel;
@@ -174,6 +177,7 @@ class shadow_label
 {
   os_label last_writer;
   os_label last_reader_range;
+  bool is_range = false;
 
   // Use a reader-writer lock
   // That is, hold exclusive and shared access for the labels.
@@ -188,21 +192,24 @@ public:
  And, to make read-read races (allowed races) fast, we should use a readers-writers (shared-exclusive) style of locking.
  However, we have to be careful-- we don't want a read-write race to miss.
 
-
+ TODO FIXME: As written, there's a distinguishability problem. 
+ Pretend you have a node with 3 children.
+ How can you distingiush between a single reader (parent) and the LCA of two readers (same parent).
+ Proposal: Maybe store some sort of depth to distinguish?
 */
 
   bool does_read_race(const os_label& reader)
   {
-    bool write_race = false;
-    range_check range = within;
+    range_check read_race;
+    range_check write_race;
     uint32_t seq;
 
 
     // To detect read-write races, we compare against the last writer and reader range.
     do {
       seq = seqlock.begin_read();
-      write_race = reader.is_parallel(last_writer);
-      range = reader.should_update_range(last_reader_range);
+      write_race = reader.range_relation(last_writer, false);
+      read_race = reader.range_relation(last_reader_range, is_range);
     } while(!seqlock.read_was_safe(seq));
 
     // To enable detection of future races, we have to make sure we update the reader range
@@ -210,41 +217,61 @@ public:
     // Unfortunately, we can't upgrade our lock. We'll have to try again under an exclusive lock.
     // If someone else has already expanded to cover us, we can stop early, since reader-writer checks are atomic.
 
-    if (range != within){
+    //We may need to update if we're not within or identical
+    if (read_race == synced || read_race == parallel){
       seqlock.begin_write();
-      write_race |= reader.is_parallel(last_writer);
-      range = reader.should_update_range(last_reader_range);
-      switch (range) {
-        case within: seqlock.end_write(); return write_race;
-        case synced: last_reader_range = reader; break;
-        case parallel: reader.expand_parallel_range(last_reader_range); break;
+      // First, grab an updated view
+      write_race = reader.range_relation(last_writer, false);
+      read_race = reader.range_relation(last_reader_range, is_range);
+      // Determine if we need to update any information
+      switch (read_race) {
+        case within: case identical: seqlock.end_write(); return write_race;
+        case synced: last_reader_range = reader; is_range = false; break;
+        case parallel: is_range = true; reader.expand_parallel_range(last_reader_range); break;
       }
       seqlock.end_write();
     }
 
-    return write_race;
+    switch (write_race) {
+        case parallel:
+        case within:
+        return true;
+    }
+    return false;
   }
 
   bool does_write_race(const os_label& writer)
   {
       // TODO: test/cilksan/TestCases
       // TODO: Count distinct races?
-      bool read_race = false;
-      bool write_race = false;
+      range_check read_race;
+      range_check write_race;
 
       // We make this atomic and exclusive under the label lock to make reasoning easier.
       // That is, the stored writer label has checked against the stored reader label
       {
         seqlock.begin_write();
         // To detect read-write races, we compare against the range of possible readers.
-        read_race = writer.is_parallel(last_reader_range);
+        read_race = writer.range_relation(last_reader_range, is_range);
         // To detect write-write races, we compare against the last writer (and set ourselves as last writer)
-        write_race = writer.is_parallel(last_writer);
+        write_race = writer.range_relation(last_writer, false);
         last_writer = writer;
         seqlock.end_write();
       }
 
-      return read_race || write_race;
+      std::cout << "READ:  " << read_race << std::endl;
+      std::cout << "WRITE: " << write_race << std::endl;
+      switch (read_race) {
+          case parallel:
+          case within:
+          return true;
+      }
+      switch (write_race) {
+          case parallel:
+          case within:
+          return true;
+      }
+      return false;
   }
   
   inline friend std::ostream& operator<<(std::ostream& os, const shadow_label& l);
@@ -262,7 +289,7 @@ inline std::ostream& operator<<(std::ostream& os, const os_label& l) {
 
 inline std::ostream& operator<<(std::ostream& os, const shadow_label& l) {
     os << "Last Writer: " << l.last_writer << std::endl;
-    os << "Range Reader: " << l.last_reader_range << std::endl;
+    os << (l.is_range ? "Range" : "Point") << " Reader: " << l.last_reader_range << std::endl;
     return os;
 }
 #endif /* _OS_LABEL_H */
