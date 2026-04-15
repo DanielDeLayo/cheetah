@@ -260,8 +260,6 @@ public:
         seqlock.end_write();
       }
 
-      std::cout << "READ:  " << read_race << std::endl;
-      std::cout << "WRITE: " << write_race << std::endl;
       switch (read_race) {
           case parallel:
           case within:
