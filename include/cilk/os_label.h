@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <shared_mutex>
 
 constexpr size_t __code_max_length = 5 * 64;
 constexpr size_t __code_nbytes = __code_max_length/8;
@@ -97,6 +96,7 @@ public:
 
   size_t inline calc_matching_prefix_length(const os_label& rhs) const
   {
+    //TODO: This is probably better suited as a while loop with a return
     size_t num_matches = 0;
     for (size_t i = 0; i <= offset && i <= rhs.offset; i++)
     {
@@ -105,6 +105,7 @@ public:
       else
         return num_matches;
     }
+    return num_matches;
   }
 
   // Returns true if in parallel
@@ -118,7 +119,7 @@ public:
     size_t num_matches = calc_matching_prefix_length(rhs);
 
     // Cases 1, 2, and 4. Offsets are indices of the last elements
-    if (num_matches == 0 || num_matches == offset || num_matches == rhs.offset)
+    if (num_matches == 0 || num_matches == offset+1 || num_matches == rhs.offset+1)
       return false;
 
     // Case 3: The tricky one.
@@ -143,10 +144,10 @@ public:
     size_t num_matches = calc_matching_prefix_length(rhs);
     
     // Case 1: same
-    if (num_matches == offset && offset == rhs.offset)
+    if (num_matches == offset+1 && offset == rhs.offset)
       return identical;
     // Case 2: descendent
-    if (num_matches == offset || num_matches == rhs.offset)
+    if (num_matches == offset+1 || num_matches == rhs.offset+1)
       return is_range ? within : synced;
     // Case 3: parallel
     if (is_parallel(rhs))
