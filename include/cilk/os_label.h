@@ -13,7 +13,7 @@ constexpr size_t __code_nbytes = __code_max_length/8;
 
 using bitset = uint8_t[__code_nbytes];
 
-// Represents your status reletive to the other label.
+// Represents your status relative to the other label.
 // Either you've synced since them, you're within the range, or your're simply in parallel
 enum range_check {synced, within, parallel, identical};
 
@@ -22,6 +22,7 @@ enum range_check {synced, within, parallel, identical};
 // shared mutex is 168 bytes. So I have to write my own.
 class atomic_seqlock
 {
+  //TODO: Make the bool a single bit? Lower order?
   std::atomic<bool> has_writer;
   std::atomic_uint8_t seq{0};
   public:
