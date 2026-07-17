@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
+#include <ostream>
 
 constexpr size_t __code_max_length = 5 * 64;
 constexpr size_t __code_nbytes = __code_max_length/8;
