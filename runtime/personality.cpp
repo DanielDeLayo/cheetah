@@ -14,11 +14,25 @@
 #include <functional>
 #include <unwind.h>
 
+using cilk::reducer_base;
+
 static struct closure_exception exception_reducer;
 
 typedef _Unwind_Reason_Code (*__personality_routine)(
     int version, _Unwind_Action actions, uint64_t exception_class,
     _Unwind_Exception *exception_object, _Unwind_Context *context);
+
+extern "C"
+_Unwind_Reason_Code __gcc_personality_v0(int version, _Unwind_Action actions,
+                                         uint64_t exception_class,
+                                         struct _Unwind_Exception *ue_header,
+                                         struct _Unwind_Context *context);
+extern "C"
+_Unwind_Reason_Code __gxx_personality_v0(int version, _Unwind_Action actions,
+                                         uint64_t exception_class,
+                                         struct _Unwind_Exception *ue_header,
+                                         struct _Unwind_Context *context);
+
 
 static char *get_cfa(_Unwind_Context *context) {
     /* _Unwind_GetCFA is originally a gcc extension.  FreeBSD has its
@@ -47,13 +61,17 @@ bool exception_reducer_is_empty() noexcept {
     return exception_reducer.exn == nullptr;
 }
 
+std::size_t closure_exception::view_size() const noexcept {
+  return sizeof *this;
+}
+
 // Identity method for the exception reducer.
-__reducer_base *closure_exception::identity(void *v) {
+reducer_base *closure_exception::identity(void *v) noexcept {
     return new (v) closure_exception;
 }
 
 // Reduce method for the exception reducer.
-void closure_exception::reduce(__reducer_base *l, __reducer_base *r) {
+void closure_exception::reduce(reducer_base *l, reducer_base *r) noexcept {
     closure_exception *lex = static_cast<closure_exception *>(l);
     closure_exception *rex = static_cast<closure_exception *>(r);
     if (lex->exn == nullptr) {
@@ -92,7 +110,7 @@ closure_exception *get_exception_reducer_or_null(__cilkrts_worker *w) noexcept {
     if (b) {
         CILK_ASSERT_POINTER_EQUAL(key, (void *)b->key);
         // Return the existing view.
-        __reducer_base *base = std::get<__reducer_base *>(b->data.extra);
+        reducer_base *base = std::get<reducer_base *>(b->data.extra);
         return static_cast<closure_exception *>(base);
     }
     // No view was found.  Don't create a new reducer view; just return NULL.
@@ -151,6 +169,7 @@ sync_in_personality(__cilkrts_worker *w, __cilkrts_stack_frame *sf,
         __cilkrts_sync(sf);
     } else {
         sanitizer_finish_switch_fiber();
+        __cilkrts_do_reductions(sf);
     }
 }
 
@@ -311,4 +330,31 @@ extern "C" _Unwind_Reason_Code __cilk_personality_internal(
     } else {
         return _URC_FATAL_PHASE1_ERROR;
     }
+}
+
+extern "C" {
+_Unwind_Reason_Code __cilk_personality_c_v0(int version, _Unwind_Action actions,
+                                            uint64_t exception_class,
+                                            struct _Unwind_Exception *ue_header,
+                                            struct _Unwind_Context *context) {
+    return __cilk_personality_internal(__gcc_personality_v0, version, actions,
+                                       exception_class, ue_header, context);
+}
+
+// Legacy name
+_Unwind_Reason_Code __cilk_personality_v0(int version, _Unwind_Action actions,
+                                          uint64_t exception_class,
+                                          struct _Unwind_Exception *ue_header,
+                                          struct _Unwind_Context *context) {
+    return __cilk_personality_c_v0(version, actions, exception_class, ue_header,
+                                   context);
+}
+
+_Unwind_Reason_Code __cilk_personality_cpp_v0(
+    int version, _Unwind_Action actions, uint64_t exception_class,
+    struct _Unwind_Exception *ue_header, struct _Unwind_Context *context) {
+    return __cilk_personality_internal(__gxx_personality_v0, version, actions,
+                                       exception_class, ue_header, context);
+}
+
 }
