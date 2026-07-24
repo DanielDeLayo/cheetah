@@ -61,13 +61,42 @@ class atomic_seqlock
 
 };
 
+#include <stdio.h>
+#include <stdlib.h>
+
+static inline void check_label_value_overflow(uint64_t current_val, uint64_t inc, uint64_t max_val) {
+    if (current_val + inc < current_val) {
+        fprintf(stderr, "[CilkPrace Error] Label value integer overflow: %llu + %llu wrapped around!\n",
+                (unsigned long long)current_val, (unsigned long long)inc);
+        exit(EXIT_FAILURE);
+    }
+    if (current_val + inc > max_val) {
+        fprintf(stderr, "[CilkPrace Error] Label value overflow: %llu + %llu exceeds max value (%llu)!\n",
+                (unsigned long long)current_val, (unsigned long long)inc, (unsigned long long)max_val);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static inline void check_label_length_overflow(size_t current_len, size_t additional_len, size_t max_len) {
+    if (current_len + additional_len < current_len) {
+        fprintf(stderr, "[CilkPrace Error] Label length size_t overflow: %zu + %zu wrapped around!\n",
+                current_len, additional_len);
+        exit(EXIT_FAILURE);
+    }
+    if (current_len + additional_len >= max_len) {
+        fprintf(stderr, "[CilkPrace Error] Label length overflow: current length %zu + added %zu exceeds max capacity (%zu)!\n",
+                current_len, additional_len, max_len);
+        exit(EXIT_FAILURE);
+    }
+}
+
 class os_label
 {
   bitset labels = {0};
   uint8_t offset = 0;
   uint8_t conts = 0;
   // Store a count of continuations to remove on sync
- 
+
 
 public:
   // Encoding: offset-span labeling DOI:10.1145/125826.125861
@@ -76,13 +105,17 @@ public:
 
   void append_left_child()
   {
+    check_label_length_overflow(offset, 1, __code_nbytes);
     labels[++offset] = 0;
+    check_label_value_overflow(conts, 1, UINT8_MAX);
     ++conts;
   }
 
   void append_right_child()
   {
+    check_label_length_overflow(offset, 1, __code_nbytes);
     labels[++offset] = 1;
+    conts = 0;
   }
 
   void restore_on_sync()
@@ -92,6 +125,7 @@ public:
     for(; conts > 0; conts--)
       labels[offset--] = 0;
     // Increment Parent
+    check_label_value_overflow(labels[offset], 2, UINT8_MAX);
     labels[offset] += 2;
   }
 
