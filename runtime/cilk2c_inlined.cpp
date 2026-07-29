@@ -134,7 +134,7 @@ uncilkify(global_state *g, __cilkrts_stack_frame *sf) {
 // function must be inlined for correctness.
 __attribute__((always_inline)) void
 __cilkrts_enter_frame(__cilkrts_stack_frame *sf) noexcept {
-    sf->flags = 0;
+    sf->flags = 0; sf->conts = 0;
     if (__cilkrts_status.need_to_cilkify) {
         cilkify(sf);
     }
@@ -147,6 +147,11 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) noexcept {
     sf->call_parent = fh->current_stack_frame;
     fh->current_stack_frame = sf;
     
+    if (USE_EXTENSION) {
+        __cilkrts_worker *w = __cilkrts_get_tls_worker();
+        if (w)
+            sf->extension = w->extension;
+    }
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
 }
 
@@ -160,7 +165,7 @@ __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
   noexcept {
     cilkrts_alert(CFRAME, "__cilkrts_enter_frame_helper %p", (void *)sf);
 
-    sf->flags = 0;
+    sf->flags = 0; sf->conts = 0;
     sf->magic = frame_magic;
 
     cilk_fiber *fh = parent->fh;
@@ -168,6 +173,12 @@ __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
     if (spawner) {
         sf->call_parent = parent;
         fh->current_stack_frame = sf;
+    }
+
+    if (USE_EXTENSION) {
+        __cilkrts_worker *w = __cilkrts_get_tls_worker();
+        if (w)
+            sf->extension = w->extension;
     }
 }
 
@@ -192,7 +203,7 @@ __cilkrts_detach(__cilkrts_stack_frame *sf, __cilkrts_stack_frame *parent)
     CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, sf));
 
     if (USE_EXTENSION) {
-        __cilkrts_extend_spawn(w, &parent->extension, &w->extension);
+        __cilkrts_extend_spawn(w, &parent->extension, &w->extension, parent);
     }
 
     sf->flags |= CILK_FRAME_DETACHED;

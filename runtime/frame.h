@@ -16,9 +16,9 @@ struct cilk_fiber;
  * are visible to the Cilk runtime.
  */
 struct __cilkrts_stack_frame {
-    // Flags is a bitfield with values defined below. Client code
     // initializes flags to 0 before the first Cilk operation.
-    uint32_t flags;
+    uint16_t flags;
+    uint16_t conts;
     // The magic number includes the ABI version and a hash of the
     // layout of this structure.
     uint32_t magic;
@@ -78,6 +78,14 @@ struct __cilkrts_stack_frame {
 //       asserts that fail if trying to longjmp back to the personality
 //       function.
 #define CILK_FRAME_SYNC_READY        0x200
+
+static inline uint16_t __cilkrts_get_conts(struct __cilkrts_stack_frame *sf) {
+    return sf->conts;
+}
+
+static inline void __cilkrts_set_conts(struct __cilkrts_stack_frame *sf, uint16_t conts) {
+    sf->conts = conts;
+}
 
 static const uint32_t frame_magic =
     (((((((((((__CILKRTS_ABI_VERSION * 13) +

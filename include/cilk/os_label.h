@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ostream>
+#include <vector>
 
 constexpr size_t __code_max_length = 5 * 64;
 constexpr size_t __code_nbytes = __code_max_length / 8;
@@ -99,8 +100,6 @@ static inline void check_label_length_overflow(size_t current_len,
 class os_label {
     bitset labels = {0};
     uint8_t offset = 0;
-    uint8_t conts = 0;
-    // Store a count of continuations to remove on sync
 
   public:
     // Encoding: offset-span labeling DOI:10.1145/125826.125861
@@ -110,17 +109,18 @@ class os_label {
     void append_left_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
         labels[++offset] = 0;
-        check_label_value_overflow(conts, 1, UINT8_MAX);
-        ++conts;
     }
 
     void append_right_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
         labels[++offset] = 1;
-        conts = 0;
     }
 
-    void restore_on_sync() {
+    // This is always called with the parent's frame. We only have to undo
+    // conts. But there's a problem because this is called without a promise
+    // that it's real. Just the keyword. 
+    // We have to reset and store conts every time we enter a new cilked function that may spawn.
+    void restore_on_sync(uint8_t conts) {
         if (conts == 0)
             return;
         // Clear left child
@@ -189,6 +189,16 @@ class os_label {
         if (is_parallel(rhs))
             return parallel;
         return synced;
+    }
+
+    // Return a clean vector of the current label values
+    std::vector<uint8_t> to_vector() const {
+        std::vector<uint8_t> vec;
+        vec.reserve(offset + 1);
+        for (size_t i = 0; i <= offset; i++) {
+            vec.push_back(labels[i]);
+        }
+        return vec;
     }
 
     // Fixup parallel LCA range
@@ -279,6 +289,9 @@ class shadow_label {
         case parallel:
         case within:
             return true;
+        case synced:
+        case identical:
+            break;
         }
         return false;
     }
@@ -308,11 +321,17 @@ class shadow_label {
         case parallel:
         case within:
             return true;
+        case synced:
+        case identical:
+            break;
         }
         switch (write_race) {
         case parallel:
         case within:
             return true;
+        case synced:
+        case identical:
+            break;
         }
         return false;
     }

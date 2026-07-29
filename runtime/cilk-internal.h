@@ -86,7 +86,8 @@ void internal_reducer_remove(__cilkrts_worker *w, void *key);
 void __cilkrts_register_extension(void *extension);
 void *__cilkrts_get_extension(void);
 void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
-                            void **child_extension);
+                            void **child_extension,
+                            __cilkrts_stack_frame *parent_sf);
 void __cilkrts_extend_return_from_spawn(__cilkrts_worker *w, void **extension);
 void __cilkrts_extend_sync(void **extension);
 

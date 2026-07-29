@@ -178,5 +178,6 @@ void __cilkrts_register_extension(void *extension) {
 extern "C"
 void *__cilkrts_get_extension(void) {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
-    return w->extension;
+    void *ext = w ? w->extension : nullptr;
+    return ext;
 }
