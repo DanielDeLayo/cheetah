@@ -9,7 +9,7 @@
 #include <ostream>
 #include <vector>
 
-constexpr size_t __code_max_length = 5 * 64;
+constexpr size_t __code_max_length = 20 * 64;
 constexpr size_t __code_nbytes = __code_max_length / 8;
 
 using bitset = uint8_t[__code_nbytes];
