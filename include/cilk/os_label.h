@@ -37,44 +37,44 @@ class atomic_seqlock {
                 #endif
             }
             // hopefully lock
-            if (!has_writer.exchange(true, std::memory_order_seq_cst)) {
+            if (!has_writer.exchange(true, std::memory_order_acquire)) {
                 break;
             }
         }
 
         // Increment sequence to odd (write in progress)
-        seq.fetch_add(1, std::memory_order_seq_cst);
-        std::atomic_thread_fence(std::memory_order_seq_cst);
+        seq.fetch_add(1, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_release);
     }
 
     void end_write() {
-        // increment sequence to even (write is done)
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        seq.fetch_add(1, std::memory_order_seq_cst);
+        // Ensure all non-atomic data writes are fully visible before we
+        // increment sequence to even (write is done).
+        std::atomic_thread_fence(std::memory_order_release);
+        seq.fetch_add(1, std::memory_order_relaxed);
 
         // Unlock
-        has_writer.store(false, std::memory_order_seq_cst);
+        has_writer.store(false, std::memory_order_release);
     }
 
     uint32_t begin_read() {
         uint32_t ret;
         // Wait until we've got an even number
-        while ((ret = seq.load(std::memory_order_seq_cst)) % 2 == 1) {
+        while ((ret = seq.load(std::memory_order_acquire)) % 2 == 1) {
             #if defined(__x86_64__) || defined(__i386__)
             __builtin_ia32_pause();
             #elif defined(__aarch64__)
             __builtin_arm_yield();
             #endif
         }
-        std::atomic_thread_fence(std::memory_order_seq_cst);
         return ret;
     }
 
     bool read_was_safe(uint32_t old_seq) { 
         // A normal acquire load does not prevent prior reads 
         // from reordering. Use a fence
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        return seq.load(std::memory_order_seq_cst) == old_seq; 
+        std::atomic_thread_fence(std::memory_order_acquire);
+        return seq.load(std::memory_order_relaxed) == old_seq; 
     }
 };
 
