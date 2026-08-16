@@ -22,38 +22,60 @@ enum range_check { synced, within, parallel, identical };
 #pragma pack(push, 1)
 // shared mutex is 168 bytes. So I have to write my own.
 class atomic_seqlock {
-    // TODO: Make the bool a single bit? Lower order?
-    std::atomic<bool> has_writer;
-    std::atomic_uint8_t seq{0};
+    std::atomic<bool> has_writer{false};
+    std::atomic<uint32_t> seq{0};
 
   public:
     void begin_write() {
-        // Loop until we get false back
-        bool locked = true;
-        while (has_writer.exchange(locked))
-            ;
+        while (true) {
+            // Spin on read to avoid cache line thrashing
+            while (has_writer.load(std::memory_order_relaxed)) {
+                #if defined(__x86_64__) || defined(__i386__)
+                __builtin_ia32_pause();
+                #elif defined(__aarch64__)
+                __builtin_arm_yield();
+                #endif
+            }
+            // hopefully lock
+            if (!has_writer.exchange(true, std::memory_order_seq_cst)) {
+                break;
+            }
+        }
 
-        // Since we're the only writer, we can simply add 1
-        seq.fetch_add(1);
+        // Increment sequence to odd (write in progress)
+        seq.fetch_add(1, std::memory_order_seq_cst);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
     void end_write() {
-        // Since we're the only writer, we can simply add 1
-        seq.fetch_add(1);
+        // increment sequence to even (write is done)
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        seq.fetch_add(1, std::memory_order_seq_cst);
 
-        // As such, we can unlock
-        has_writer.exchange(false);
+        // Unlock
+        has_writer.store(false, std::memory_order_seq_cst);
     }
 
     uint32_t begin_read() {
         uint32_t ret;
-        // Might as well wait until we've got an even number
-        while ((ret = seq.load()) % 2 == 1)
-            ;
+        // Wait until we've got an even number
+        while ((ret = seq.load(std::memory_order_seq_cst)) % 2 == 1) {
+            #if defined(__x86_64__) || defined(__i386__)
+            __builtin_ia32_pause();
+            #elif defined(__aarch64__)
+            __builtin_arm_yield();
+            #endif
+        }
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         return ret;
     }
 
-    bool read_was_safe(uint32_t old_seq) { return seq.load() == old_seq; }
+    bool read_was_safe(uint32_t old_seq) { 
+        // A normal acquire load does not prevent prior reads 
+        // from reordering. Use a fence
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        return seq.load(std::memory_order_seq_cst) == old_seq; 
+    }
 };
 
 #include <stdio.h>
@@ -132,14 +154,30 @@ class os_label {
     }
 
     size_t inline calc_matching_prefix_length(const os_label &rhs) const {
-        // TODO: This is probably better suited as a while loop with a return
+        size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
+        size_t min_len = min_offset + 1;
         size_t num_matches = 0;
-        for (size_t i = 0; i <= offset && i <= rhs.offset; i++) {
-            if (labels[i] == rhs.labels[i])
-                num_matches++;
-            else
-                return num_matches;
+
+        // Compare in 8-byte chunks
+        while (num_matches + 8 <= min_len) {
+            const uint64_t* p1 = reinterpret_cast<const uint64_t*>(&labels[num_matches]);
+            const uint64_t* p2 = reinterpret_cast<const uint64_t*>(&rhs.labels[num_matches]);
+            
+            if (*p1 == *p2) {
+                num_matches += 8;
+            } else {
+                uint64_t diff = *p1 ^ *p2;
+                //TODO: make this work regardless of endianness
+                return num_matches + (__builtin_ctzll(diff) / 8);
+            }
         }
+
+        // Find the exact mismatch point in the remaining bytes (at most 7 bytes)
+        for (; num_matches < min_len; num_matches++) {
+            if (labels[num_matches] != rhs.labels[num_matches])
+                break;
+        }
+        
         return num_matches;
     }
 
