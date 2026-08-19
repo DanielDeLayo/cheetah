@@ -5,8 +5,8 @@
 #include <ostream>
 
 // Toggle which label representation to use here:
-#include "os_label_leb8.h"
-//#include "os_label_string.h"
+//#include "os_label_leb8.h"
+#include "os_label_string.h"
 
 class shadow_label {
     os_label last_writer;
