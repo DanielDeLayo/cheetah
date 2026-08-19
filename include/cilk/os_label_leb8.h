@@ -71,6 +71,11 @@ struct os_label {
         return min_blocks;
     }
 
+    __attribute__((always_inline))
+    bool is_serial() const {
+        return offset == 0;
+    }
+
     // Finds the start of the level containing block 'i'
     __attribute__((always_inline)) size_t find_level_start(size_t i) const {
         if (i == 0) return 0;

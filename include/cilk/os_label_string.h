@@ -73,6 +73,10 @@ struct os_label {
         labels[++offset] = 0;
     }
 
+    __attribute__((always_inline)) bool is_serial() const {
+        return offset == 0;
+    }
+
     __attribute__((always_inline)) void append_right_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
         labels[++offset] = 1;
