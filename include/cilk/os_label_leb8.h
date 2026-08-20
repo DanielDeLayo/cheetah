@@ -16,7 +16,8 @@ enum range_check { synced, within, parallel, identical };
 struct os_label {
     // LEB8 encoded bit array. Each byte holds two 4-bit blocks.
     // Block format: [C (1 bit), P (3 bits)] where C is continuation.
-    uint8_t data[64] = {0};
+    // 62 is so it's properly aligned 8 byte aligned
+    uint8_t data[62] = {0};
     uint16_t offset = 0; // Index of the last block. 0-initialized means 1 block at index 0.
 
     inline uint8_t get_block(size_t index) const {
@@ -182,8 +183,15 @@ struct os_label {
                 if ((get_block(offset) & 8) == 0) {
                     conts--;
                 }
-                if (conts > 0) offset--;
+                offset--;
             }
+        }
+        
+        // At this point, we've dropped the C=0 blocks of 'conts' levels.
+        // But offset might be pointing to a C=1 block that belongs to the last dropped level!
+        // We must drop all C=1 blocks until we hit the C=0 block of the remaining parent level.
+        while (offset > 0 && (get_block(offset) & 8) != 0) {
+            offset--;
         }
 
         // Find the start block of the parent (now the last level)
