@@ -204,9 +204,16 @@ static void setup_for_sync(__cilkrts_worker *w, worker_id self, Closure *t) {
         // Set the worker's extension (analogous to updating the worker's stack
         // pointer).
         w->extension = t->frame->extension;
-        // Set the worker's extension stack pointer to the current extension
-        // frame, at the bottom of that stack.
-        w->ext_stack = t->frame->extension;
+        if (t == w->g->root_closure) {
+            // The root closure's extension is statically allocated in .bss,
+            // so we cannot grow the stack downward from it. Instead, we use
+            // the root closure's ext_fiber.
+            w->ext_stack = t->ext_fiber->get_stack_start();
+        } else {
+            // Set the worker's extension stack pointer to the current extension
+            // frame, at the bottom of that stack.
+            w->ext_stack = t->frame->extension;
+        }
     }
     t->orig_rsp = nullptr; // unset once we have sync-ed
 }
