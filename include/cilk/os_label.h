@@ -5,8 +5,8 @@
 #include <ostream>
 
 // Toggle which label representation to use here:
-#include "os_label_leb8.h"
-//#include "os_label_string.h"
+//#include "os_label_leb8.h"
+#include "os_label_string.h"
 
 class alignas(64) shadow_label {
     os_label last_writer;
@@ -26,11 +26,6 @@ class alignas(64) shadow_label {
      readers-writers (shared-exclusive) style of locking. However, we have to be
      careful-- we don't want a read-write race to miss.
 
-     TODO FIXME: As written, there's a distinguishability problem.
-     Pretend you have a node with 3 children.
-     How can you distingiush between a single reader (parent) and the LCA of two
-     readers (same parent). Proposal: Maybe store some sort of depth to
-     distinguish?
     */
 
     bool does_read_race(const os_label &reader) {
