@@ -8,7 +8,7 @@
 #include "os_label_leb8.h"
 //#include "os_label_string.h"
 
-class shadow_label {
+class alignas(64) shadow_label {
     os_label last_writer;
     os_label last_reader_range;
     bool is_range = false;
