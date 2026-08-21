@@ -58,9 +58,9 @@ class alignas(64) shadow_label {
             case within:
             case identical:
                 seqlock.end_write();
-                return write_race;
+                return write_race == parallel || write_race == within;
             case synced:
-                last_reader_range = reader;
+                last_reader_range.copy_from(reader);
                 is_range = false;
                 break;
             case parallel:
@@ -99,7 +99,10 @@ class alignas(64) shadow_label {
             // To detect write-write races, we compare against the last writer
             // (and set ourselves as last writer)
             write_race = writer.range_relation(last_writer, false);
-            last_writer = writer;
+            // Do not modify unless we have to :)
+            if (write_race != identical) {
+                last_writer.copy_from(writer);
+            }
             seqlock.end_write();
         }
 
