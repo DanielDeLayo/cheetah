@@ -44,8 +44,22 @@ struct os_label {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
         size_t min_blocks = min_offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
-        size_t num_matches = 0;
 
+        if (__builtin_expect(min_bytes <= 8, 1)) {
+            uint64_t v1 = *reinterpret_cast<const uint64_t *>(data);
+            uint64_t v2 = *reinterpret_cast<const uint64_t *>(rhs.data);
+            uint64_t mask =
+                (min_bytes == 8) ? ~0ULL : ((1ULL << (min_bytes * 8)) - 1);
+            uint64_t diff = (v1 ^ v2) & mask;
+            if (__builtin_expect(diff == 0, 0))
+                return min_blocks;
+            size_t byte_diff = __builtin_ctzll(diff) >> 3;
+            uint8_t b1 = (v1 >> (byte_diff << 3)) & 0xFF;
+            uint8_t b2 = (v2 >> (byte_diff << 3)) & 0xFF;
+            return (byte_diff << 1) + ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
+        }
+
+        size_t num_matches = 0;
         // Compare in 8-byte chunks (16 blocks at a time)
         while (num_matches + 8 <= min_bytes) {
             uint64_t v1 =
@@ -57,7 +71,7 @@ struct os_label {
                 num_matches += 8;
             } else {
                 uint64_t diff = v1 ^ v2;
-                size_t byte_diff = __builtin_ctzll(diff) / 8;
+                size_t byte_diff = __builtin_ctzll(diff) >> 3;
                 size_t byte_idx = num_matches + byte_diff;
                 uint8_t b1 = data[byte_idx];
                 uint8_t b2 = rhs.data[byte_idx];
@@ -115,8 +129,18 @@ struct os_label {
 
     // Finds the start of the level containing block 'i'
     __attribute__((always_inline)) size_t find_level_start(size_t i) const {
-        if (i == 0)
+        if (__builtin_expect(i == 0, 0))
             return 0;
+        if (__builtin_expect(i <= 16, 1)) {
+            uint64_t v = *reinterpret_cast<const uint64_t *>(data);
+            uint64_t not_C = ~v & 0x8888888888888888ULL;
+            uint64_t mask = (i == 16) ? ~0ULL : ((1ULL << (i * 4)) - 1);
+            uint64_t masked = not_C & mask;
+            if (__builtin_expect(masked == 0, 0))
+                return 0;
+            return ((63 - __builtin_clzll(masked)) >> 2) + 1;
+        }
+
         size_t level_start = i;
 
         // Block-by-block if i is odd (not aligned to byte)
@@ -261,8 +285,8 @@ struct os_label {
     }
 
     // Returns true if in parallel
-    bool is_parallel(const os_label &rhs) const {
-        if (is_empty() || rhs.is_empty())
+    __attribute__((always_inline)) bool is_parallel(const os_label &rhs) const {
+        if (__builtin_expect(is_empty() || rhs.is_empty(), 0))
             return false;
 
         size_t i = calc_matching_block_length(rhs);
@@ -275,18 +299,29 @@ struct os_label {
         // Find the start of the diverging level
         size_t level_start = find_level_start(i);
 
-        uint8_t my_dir = get_block(level_start) & 1;
-        uint8_t rhs_dir = rhs.get_block(level_start) & 1;
+        uint8_t my_dir =
+            (data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
+        uint8_t rhs_dir =
+            (rhs.data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
 
         return my_dir != rhs_dir;
     }
 
     // Should fixup LCA range?
-    range_check range_relation(const os_label &rhs,
-                               const bool &is_range) const {
+    __attribute__((always_inline)) range_check
+    range_relation(const os_label &rhs, const bool &is_range) const {
+        if (__builtin_expect(rhs.is_empty(), 0)) {
+            if (is_empty())
+                return identical;
+            return is_range ? within : synced;
+        }
+        if (__builtin_expect(is_empty(), 0)) {
+            return is_range ? within : synced;
+        }
+
         size_t i = calc_matching_block_length(rhs);
 
-        if (i == offset + 1 && i == rhs.offset + 1)
+        if (__builtin_expect(i == offset + 1 && i == rhs.offset + 1, 0))
             return identical;
 
         if (i == rhs.offset + 1) // rhs is prefix of this -> this is descendent
@@ -298,8 +333,10 @@ struct os_label {
         // Check if parallel
         size_t level_start = find_level_start(i);
 
-        uint8_t my_dir = get_block(level_start) & 1;
-        uint8_t rhs_dir = rhs.get_block(level_start) & 1;
+        uint8_t my_dir =
+            (data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
+        uint8_t rhs_dir =
+            (rhs.data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
 
         if (my_dir != rhs_dir) {
             return parallel;
@@ -328,19 +365,17 @@ struct os_label {
     }
 
     // Fixup parallel LCA range
+    __attribute__((always_inline))
     void expand_parallel_range(os_label &rhs) const {
         size_t i = calc_matching_block_length(rhs);
         size_t level_start = find_level_start(i);
 
-        // Truncate rhs to the LCA
-        rhs.offset = level_start > 0 ? level_start - 1 : 0;
-        if (level_start == 0) {
-            rhs.set_block(0, 0);
+        // Truncate rhs to the LCA continuation
+        rhs.offset = level_start;
+        if ((level_start & 1) == 0) {
+            rhs.data[level_start >> 1] &= 0xF0;
         } else {
-            // Expand to the continuation (left child, which is represented by
-            // pushing 0 payload)
-            rhs.offset = level_start;
-            rhs.set_block(rhs.offset, 0);
+            rhs.data[level_start >> 1] &= 0x0F;
         }
     }
 

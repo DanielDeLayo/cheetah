@@ -28,6 +28,7 @@ class alignas(64) shadow_label {
 
     */
 
+    __attribute__((always_inline))
     bool does_read_race(const os_label &reader) {
         range_check read_race;
         range_check write_race;
@@ -37,8 +38,14 @@ class alignas(64) shadow_label {
         // reader range.
         do {
             seq = seqlock.begin_read();
-            write_race = reader.range_relation(last_writer, false);
-            read_race = reader.range_relation(last_reader_range, is_range);
+            write_race = last_writer.is_empty()
+                             ? synced
+                             : reader.range_relation(last_writer, false);
+            if (!is_range && reader.is_identical(last_reader_range)) {
+                read_race = identical;
+            } else {
+                read_race = reader.range_relation(last_reader_range, is_range);
+            }
         } while (!seqlock.read_was_safe(seq));
 
         // To enable detection of future races, we have to make sure we update
@@ -51,8 +58,14 @@ class alignas(64) shadow_label {
         if (read_race == synced || read_race == parallel) {
             seqlock.begin_write();
             // First, grab an updated view
-            write_race = reader.range_relation(last_writer, false);
-            read_race = reader.range_relation(last_reader_range, is_range);
+            write_race = last_writer.is_empty()
+                             ? synced
+                             : reader.range_relation(last_writer, false);
+            if (!is_range && reader.is_identical(last_reader_range)) {
+                read_race = identical;
+            } else {
+                read_race = reader.range_relation(last_reader_range, is_range);
+            }
             // Determine if we need to update any information
             switch (read_race) {
             case within:
@@ -71,58 +84,48 @@ class alignas(64) shadow_label {
             seqlock.end_write();
         }
 
-        switch (write_race) {
-        case parallel:
-        case within:
-            return true;
-        case synced:
-        case identical:
-            break;
-        }
-        return false;
+        return write_race == parallel || write_race == within;
     }
 
+    __attribute__((always_inline))
     bool does_write_race(const os_label &writer) {
-        // TODO: test/cilksan/TestCases
-        // TODO: Count distinct races?
+        // Optimistically read the last_writer:
+        // If the writer hasn't changed, then we can simply leave.
+        // After all, any intervening reader already checked against this writer.
+        uint32_t seq;
+        bool is_same_writer = false;
+
+        do {
+            seq = seqlock.begin_read();
+            is_same_writer = writer.is_identical(last_writer);
+        } while (!seqlock.read_was_safe(seq));
+
+        if (is_same_writer) {
+            return false;
+        }
+
+        // Slow path: We have to update something and therefore check races.
         range_check read_race;
         range_check write_race;
 
-        // We make this atomic and exclusive under the label lock to make
-        // reasoning easier. That is, the stored writer label has checked
-        // against the stored reader label
-        {
-            seqlock.begin_write();
-            // To detect read-write races, we compare against the range of
-            // possible readers.
-            read_race = writer.range_relation(last_reader_range, is_range);
-            // To detect write-write races, we compare against the last writer
-            // (and set ourselves as last writer)
-            write_race = writer.range_relation(last_writer, false);
-            // Do not modify unless we have to :)
-            if (write_race != identical) {
-                last_writer.copy_from(writer);
-            }
-            seqlock.end_write();
+        seqlock.begin_write();
+        // To detect read-write races, we compare against the range of possible readers.
+        read_race = last_reader_range.is_empty()
+                        ? synced
+                        : writer.range_relation(last_reader_range, is_range);
+        // To detect write-write races, we compare against the last writer
+        // (and set ourselves as last writer)
+        write_race = last_writer.is_empty()
+                         ? synced
+                         : writer.range_relation(last_writer, false);
+        // Do not modify unless we have to :)
+        if (write_race != identical) {
+            last_writer.copy_from(writer);
         }
+        seqlock.end_write();
 
-        switch (read_race) {
-        case parallel:
-        case within:
-            return true;
-        case synced:
-        case identical:
-            break;
-        }
-        switch (write_race) {
-        case parallel:
-        case within:
-            return true;
-        case synced:
-        case identical:
-            break;
-        }
-        return false;
+        return (read_race == parallel || read_race == within) ||
+               (write_race == parallel || write_race == within);
     }
 
     inline friend std::ostream &operator<<(std::ostream &os,
