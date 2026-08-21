@@ -26,7 +26,6 @@ class atomic_seqlock {
                 #endif
             }
         }
-        std::atomic_thread_fence(std::memory_order_release);
     }
 
     void end_write() {
