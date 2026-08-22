@@ -28,7 +28,6 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((always_inline))
     bool does_read_race(const os_label &reader) {
         range_check read_race;
         range_check write_race;
@@ -87,7 +86,6 @@ class alignas(64) shadow_label {
         return write_race == parallel || write_race == within;
     }
 
-    __attribute__((always_inline))
     bool does_write_race(const os_label &writer) {
         // Optimistically read the last_writer:
         // If the writer hasn't changed, then we can simply leave.

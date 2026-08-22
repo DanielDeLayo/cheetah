@@ -39,8 +39,7 @@ struct os_label {
     }
 
     // Finds the exact block index where this and rhs diverge
-    __attribute__((always_inline)) size_t
-    calc_matching_block_length(const os_label &rhs) const {
+    size_t calc_matching_block_length(const os_label &rhs) const {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
         size_t min_blocks = min_offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
@@ -92,8 +91,7 @@ struct os_label {
         return min_blocks;
     }
 
-    __attribute__((always_inline)) inline bool
-    is_identical(const os_label &rhs) const {
+    bool is_identical(const os_label &rhs) const {
         if (__builtin_expect(offset != rhs.offset, 0))
             return false;
         size_t bytes = (offset + 2) >> 1;
@@ -107,7 +105,7 @@ struct os_label {
         return memcmp(data, rhs.data, bytes) == 0;
     }
 
-    __attribute__((always_inline)) inline void copy_from(const os_label &src) {
+    void copy_from(const os_label &src) {
         offset = src.offset;
         size_t bytes = (src.offset + 2) >> 1;
         if (__builtin_expect(bytes <= 8, 1)) {
@@ -123,12 +121,12 @@ struct os_label {
         }
     }
 
-    __attribute__((always_inline)) bool is_serial() const {
+    bool is_serial() const {
         return offset == 0;
     }
 
     // Finds the start of the level containing block 'i'
-    __attribute__((always_inline)) size_t find_level_start(size_t i) const {
+    size_t find_level_start(size_t i) const {
         if (__builtin_expect(i == 0, 0))
             return 0;
         if (__builtin_expect(i <= 16, 1)) {
@@ -187,9 +185,9 @@ struct os_label {
   public:
     bool is_empty() const { return offset == 0 && data[0] == 0; }
 
-    __attribute__((always_inline)) void append_left_child() { push_level(0); }
+    void append_left_child() { push_level(0); }
 
-    __attribute__((always_inline)) void append_right_child() { push_level(1); }
+    void append_right_child() { push_level(1); }
 
     __attribute__((always_inline)) void restore_on_sync(uint8_t conts) {
         if (conts == 0)
@@ -285,7 +283,7 @@ struct os_label {
     }
 
     // Returns true if in parallel
-    __attribute__((always_inline)) bool is_parallel(const os_label &rhs) const {
+    bool is_parallel(const os_label &rhs) const {
         if (__builtin_expect(is_empty() || rhs.is_empty(), 0))
             return false;
 
@@ -308,8 +306,7 @@ struct os_label {
     }
 
     // Should fixup LCA range?
-    __attribute__((always_inline)) range_check
-    range_relation(const os_label &rhs, const bool &is_range) const {
+    range_check range_relation(const os_label &rhs, const bool &is_range) const {
         if (__builtin_expect(rhs.is_empty(), 0)) {
             if (is_empty())
                 return identical;
@@ -365,7 +362,6 @@ struct os_label {
     }
 
     // Fixup parallel LCA range
-    __attribute__((always_inline))
     void expand_parallel_range(os_label &rhs) const {
         size_t i = calc_matching_block_length(rhs);
         size_t level_start = find_level_start(i);

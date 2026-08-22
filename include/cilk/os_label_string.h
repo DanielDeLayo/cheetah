@@ -68,28 +68,27 @@ struct os_label {
         return offset == 0 && labels[0] == 0;
     }
 
-    __attribute__((always_inline)) void append_left_child() {
+    void append_left_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
         labels[++offset] = 0;
     }
 
-    __attribute__((always_inline)) bool is_serial() const {
+    bool is_serial() const {
         return offset == 0;
     }
 
-    __attribute__((always_inline)) inline bool
-    is_identical(const os_label &rhs) const {
+    bool is_identical(const os_label &rhs) const {
         if (offset != rhs.offset)
             return false;
         return memcmp(labels, rhs.labels, offset + 1) == 0;
     }
 
-    __attribute__((always_inline)) inline void copy_from(const os_label &src) {
+    void copy_from(const os_label &src) {
         offset = src.offset;
         memcpy(labels, src.labels, src.offset + 1);
     }
 
-    __attribute__((always_inline)) void append_right_child() {
+    void append_right_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
         labels[++offset] = 1;
     }
