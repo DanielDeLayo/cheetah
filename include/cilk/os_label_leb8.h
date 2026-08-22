@@ -44,47 +44,11 @@ struct os_label {
         size_t min_blocks = min_offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
 
-        if (__builtin_expect(min_bytes <= 8, 1)) {
-            uint64_t v1 = *reinterpret_cast<const uint64_t *>(data);
-            uint64_t v2 = *reinterpret_cast<const uint64_t *>(rhs.data);
-            uint64_t mask =
-                (min_bytes == 8) ? ~0ULL : ((1ULL << (min_bytes * 8)) - 1);
-            uint64_t diff = (v1 ^ v2) & mask;
-            if (__builtin_expect(diff == 0, 0))
-                return min_blocks;
-            size_t byte_diff = __builtin_ctzll(diff) >> 3;
-            uint8_t b1 = (v1 >> (byte_diff << 3)) & 0xFF;
-            uint8_t b2 = (v2 >> (byte_diff << 3)) & 0xFF;
-            return (byte_diff << 1) + ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
-        }
-
-        size_t num_matches = 0;
-        // Compare in 8-byte chunks (16 blocks at a time)
-        while (num_matches + 8 <= min_bytes) {
-            uint64_t v1 =
-                *reinterpret_cast<const uint64_t *>(&data[num_matches]);
-            uint64_t v2 =
-                *reinterpret_cast<const uint64_t *>(&rhs.data[num_matches]);
-
-            if (v1 == v2) {
-                num_matches += 8;
-            } else {
-                uint64_t diff = v1 ^ v2;
-                size_t byte_diff = __builtin_ctzll(diff) >> 3;
-                size_t byte_idx = num_matches + byte_diff;
-                uint8_t b1 = data[byte_idx];
-                uint8_t b2 = rhs.data[byte_idx];
-                return (byte_idx << 1) + ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
-            }
-        }
-
-        // Compare remaining bytes
-        for (; num_matches < min_bytes; num_matches++) {
-            if (data[num_matches] != rhs.data[num_matches]) {
-                uint8_t b1 = data[num_matches];
-                uint8_t b2 = rhs.data[num_matches];
-                return (num_matches << 1) +
-                       ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
+        for (size_t i = 0; i < min_bytes; i++) {
+            if (data[i] != rhs.data[i]) {
+                uint8_t b1 = data[i];
+                uint8_t b2 = rhs.data[i];
+                return (i << 1) + ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
             }
         }
 
@@ -92,33 +56,16 @@ struct os_label {
     }
 
     bool is_identical(const os_label &rhs) const {
-        if (__builtin_expect(offset != rhs.offset, 0))
+        if (offset != rhs.offset)
             return false;
         size_t bytes = (offset + 2) >> 1;
-        if (__builtin_expect(bytes <= 8, 1)) {
-            uint64_t v1 = *reinterpret_cast<const uint64_t *>(data);
-            uint64_t v2 = *reinterpret_cast<const uint64_t *>(rhs.data);
-            uint64_t mask =
-                (bytes == 8) ? ~0ULL : ((1ULL << (bytes * 8)) - 1);
-            return ((v1 ^ v2) & mask) == 0;
-        }
         return memcmp(data, rhs.data, bytes) == 0;
     }
 
     void copy_from(const os_label &src) {
         offset = src.offset;
         size_t bytes = (src.offset + 2) >> 1;
-        if (__builtin_expect(bytes <= 8, 1)) {
-            *reinterpret_cast<uint64_t *>(data) =
-                *reinterpret_cast<const uint64_t *>(src.data);
-        } else if (__builtin_expect(bytes <= 16, 1)) {
-            *reinterpret_cast<uint64_t *>(data) =
-                *reinterpret_cast<const uint64_t *>(src.data);
-            *reinterpret_cast<uint64_t *>(&data[8]) =
-                *reinterpret_cast<const uint64_t *>(&src.data[8]);
-        } else {
-            memcpy(data, src.data, bytes);
-        }
+        memcpy(data, src.data, bytes);
     }
 
     bool is_serial() const {
@@ -127,17 +74,8 @@ struct os_label {
 
     // Finds the start of the level containing block 'i'
     size_t find_level_start(size_t i) const {
-        if (__builtin_expect(i == 0, 0))
+        if (i == 0)
             return 0;
-        if (__builtin_expect(i <= 16, 1)) {
-            uint64_t v = *reinterpret_cast<const uint64_t *>(data);
-            uint64_t not_C = ~v & 0x8888888888888888ULL;
-            uint64_t mask = (i == 16) ? ~0ULL : ((1ULL << (i * 4)) - 1);
-            uint64_t masked = not_C & mask;
-            if (__builtin_expect(masked == 0, 0))
-                return 0;
-            return ((63 - __builtin_clzll(masked)) >> 2) + 1;
-        }
 
         size_t level_start = i;
 
@@ -155,12 +93,10 @@ struct os_label {
         size_t byte_idx = (level_start >> 1) - 1;
         while (true) {
             uint8_t b = data[byte_idx];
-            if ((b & 0x80) == 0) { // Upper block C is 0
+            if ((b & 0x80) == 0) // Upper block C is 0
                 return (byte_idx << 1) + 2;
-            }
-            if ((b & 0x08) == 0) { // Lower block C is 0
+            if ((b & 0x08) == 0) // Lower block C is 0
                 return (byte_idx << 1) + 1;
-            }
             if (byte_idx == 0)
                 break;
             byte_idx--;
