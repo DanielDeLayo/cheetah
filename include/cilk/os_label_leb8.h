@@ -16,10 +16,11 @@ enum range_check { synced, within, parallel, identical };
 struct os_label {
     // LEB8 encoded bit array. Each byte holds two 4-bit blocks.
     // Block format: [C (1 bit), P (3 bits)] where C is continuation.
-    // 62 is so it's properly aligned 8 byte aligned
-    uint8_t data[62] = {0};
-    uint16_t offset =
+    uint8_t data[59] = {0};
+    uint8_t offset =
         0; // Index of the last block. 0-initialized means 1 block at index 0.
+
+    static constexpr size_t max_blocks = sizeof(data) * 2;
 
     inline uint8_t get_block(size_t index) const {
         if ((index & 1) == 0) {
@@ -106,7 +107,7 @@ struct os_label {
 
     void push_level(uint64_t V) {
         do {
-            if (offset + 1 >= 128) {
+            if (offset + 1 >= max_blocks) {
                 fprintf(stderr, "[CilkPrace Error] Label length overflow!\n");
                 exit(EXIT_FAILURE);
             }
@@ -212,7 +213,7 @@ struct os_label {
 
         // Handle overflow if the parent value grew to require a new block
         if (carry > 0) {
-            if (offset + 1 >= 128) {
+            if (offset + 1 >= max_blocks) {
                 fprintf(stderr, "[CilkPrace Error] Label length overflow!\n");
                 exit(EXIT_FAILURE);
             }

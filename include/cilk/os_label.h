@@ -11,12 +11,11 @@
 class alignas(64) shadow_label {
     os_label last_writer;
     os_label last_reader_range;
-    bool is_range = false;
-
     // Use a reader-writer lock
     // That is, hold exclusive and shared access for the labels.
     // Except, those are too big, so let's use a retry-seqlock instead.
     atomic_seqlock seqlock;
+    bool is_range = false;
 
   public:
     /*
@@ -153,4 +152,7 @@ inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
        << std::endl;
     return os;
 }
+
+static_assert(sizeof(shadow_label) == 128, "shadow_label must be 128 bytes");
+
 #endif /* _OS_LABEL_H */
