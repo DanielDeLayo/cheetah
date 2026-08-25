@@ -37,13 +37,17 @@ class alignas(64) shadow_label {
         // reader range.
         do {
             seq = seqlock.begin_read();
-            write_race = last_writer.is_empty()
-                             ? synced
-                             : reader.range_relation(last_writer, false);
+            if (last_writer.is_empty() || reader.is_identical(last_writer)) {
+                write_race = synced;
+            } else {
+                write_race = reader.range_relation(last_writer, false);
+            }
             if (!is_range && reader.is_identical(last_reader_range)) {
                 read_race = identical;
             } else {
-                read_race = reader.range_relation(last_reader_range, is_range);
+                read_race = last_reader_range.is_empty()
+                                ? synced
+                                : reader.range_relation(last_reader_range, is_range);
             }
         } while (!seqlock.read_was_safe(seq));
 
@@ -57,13 +61,17 @@ class alignas(64) shadow_label {
         if (read_race == synced || read_race == parallel) {
             seqlock.begin_write();
             // First, grab an updated view
-            write_race = last_writer.is_empty()
-                             ? synced
-                             : reader.range_relation(last_writer, false);
+            if (last_writer.is_empty() || reader.is_identical(last_writer)) {
+                write_race = synced;
+            } else {
+                write_race = reader.range_relation(last_writer, false);
+            }
             if (!is_range && reader.is_identical(last_reader_range)) {
                 read_race = identical;
             } else {
-                read_race = reader.range_relation(last_reader_range, is_range);
+                read_race = last_reader_range.is_empty()
+                                ? synced
+                                : reader.range_relation(last_reader_range, is_range);
             }
             // Determine if we need to update any information
             switch (read_race) {
@@ -119,6 +127,11 @@ class alignas(64) shadow_label {
         // Do not modify unless we have to :)
         if (write_race != identical) {
             last_writer.copy_from(writer);
+        }
+        // Our reader is in series with our writer. Thus, we can prune it, as races are impossible.
+        if (read_race == synced) {
+            last_reader_range.clear();
+            is_range = false;
         }
         seqlock.end_write();
 

@@ -120,6 +120,10 @@ struct os_label {
 
   public:
     bool is_empty() const { return offset == 0 && data[0] == 0; }
+    void clear() {
+        offset = 0;
+        data[0] = 0;
+    }
 
     void append_left_child() { push_level(0); }
 

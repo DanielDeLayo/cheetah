@@ -67,6 +67,10 @@ struct os_label {
     bool is_empty() const {
         return offset == 0 && labels[0] == 0;
     }
+    void clear() {
+        offset = 0;
+        labels[0] = 0;
+    }
 
     void append_left_child() {
         check_label_length_overflow(offset, 1, __code_nbytes);
