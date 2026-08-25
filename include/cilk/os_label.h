@@ -88,6 +88,10 @@ class alignas(64) shadow_label {
                 reader.expand_parallel_range(last_reader_range);
                 break;
             }
+            // Our reader is in series with last_writer. Thus, we can prune last_writer.
+            if (write_race == synced) {
+                last_writer.clear();
+            }
             seqlock.end_write();
         }
 

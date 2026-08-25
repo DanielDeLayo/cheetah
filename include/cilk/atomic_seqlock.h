@@ -34,15 +34,19 @@ class atomic_seqlock {
     }
 
     uint32_t begin_read() {
-        uint32_t ret;
         // While odd (has writer) yield loop
-        while ((ret = seq.load(std::memory_order_acquire)) & 1) {
-            #if defined(__x86_64__) || defined(__i386__)
-            __builtin_ia32_pause();
-            #elif defined(__aarch64__)
+        // This is a weak operation; so, we can read with just atomicity
+        uint32_t ret = seq.load(std::memory_order_relaxed);
+        while (__builtin_expect(ret & 1, 0)) {
+            #if defined(__aarch64__)
             __builtin_arm_yield();
+            #elif defined(__x86_64__) || defined(__i386__)
+            __builtin_ia32_pause();
             #endif
+            ret = seq.load(std::memory_order_relaxed);
         }
+        // and declare that we've acquired a resource (barrier)
+        std::atomic_thread_fence(std::memory_order_acquire);
         return ret;
     }
 
