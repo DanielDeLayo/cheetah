@@ -44,12 +44,15 @@ struct os_label {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
         size_t min_blocks = min_offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
+        size_t num_words = (min_bytes + 7) >> 3;
 
-        for (size_t i = 0; i < min_bytes; i++) {
-            if (data[i] != rhs.data[i]) {
-                uint8_t b1 = data[i];
-                uint8_t b2 = rhs.data[i];
-                return (i << 1) + ((b1 & 0x0F) == (b2 & 0x0F) ? 1 : 0);
+        const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
+        const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
+
+        for (size_t i = 0; i < num_words; i++) {
+            if (w1[i] != w2[i]) {
+                size_t nibble_idx = (i << 4) + (__builtin_ctzll(w1[i] ^ w2[i]) >> 2);
+                return nibble_idx < min_blocks ? nibble_idx : min_blocks;
             }
         }
 
@@ -59,8 +62,22 @@ struct os_label {
     bool is_identical(const os_label &rhs) const {
         if (offset != rhs.offset)
             return false;
-        size_t bytes = (offset + 2) >> 1;
-        return memcmp(data, rhs.data, bytes) == 0;
+        size_t min_blocks = offset + 1;
+        size_t min_bytes = (min_blocks + 1) >> 1;
+        size_t num_words = (min_bytes + 7) >> 3;
+        const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
+        const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
+
+        for (size_t i = 0; i < num_words - 1; i++) {
+            if (w1[i] != w2[i])
+                return false;
+        }
+
+        size_t last_word = num_words - 1;
+        size_t rem_blocks = min_blocks - (last_word << 4);
+        uint64_t mask =
+            (rem_blocks == 16) ? ~0ULL : ((1ULL << (rem_blocks * 4)) - 1);
+        return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
     }
 
     void copy_from(const os_label &src) {
