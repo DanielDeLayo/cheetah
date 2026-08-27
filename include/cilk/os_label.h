@@ -27,64 +27,9 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((noinline, cold, preserve_most))
-    bool does_read_race_slow(const os_label &reader) {
-        range_check read_race;
-        range_check write_race;
+    __attribute__((visibility("default")))
+    bool does_read_race_slow(const os_label &reader);
 
-        // To enable detection of future races, we have to make sure we update
-        // the reader range And make sure nothing is missed :) Unfortunately, we
-        // can't upgrade our lock. We'll have to try again under an exclusive
-        // lock. If someone else has already expanded to cover us, we can stop
-        // early, since reader-writer checks are atomic.
-        seqlock.begin_write();
-
-        // Check if covered by current reader range
-        if (!is_range && reader.is_identical(last_reader_range)) {
-            read_race = identical;
-        } else {
-            read_race = last_reader_range.is_empty()
-                            ? synced
-                            : reader.range_relation(last_reader_range, is_range);
-        }
-
-        // If reader is within LCA range or identical, we don't need to update
-        // the range or inspect the write register; release lock and return.
-        if (read_race == within || read_race == identical) {
-            seqlock.end_write();
-            return false;
-        }
-
-        // We need to update the reader range. Check write race now.
-        if (last_writer.is_empty() || reader.is_identical(last_writer)) {
-            write_race = synced;
-        } else {
-            write_race = reader.range_relation(last_writer, false);
-        }
-
-        switch (read_race) {
-        case synced:
-            last_reader_range.copy_from(reader);
-            is_range = false;
-            break;
-        case parallel:
-            is_range = true;
-            reader.expand_parallel_range(last_reader_range);
-            break;
-        default:
-            break;
-        }
-
-        // Our reader is in series with last_writer. Thus, we can prune last_writer.
-        if (write_race == synced) {
-            last_writer.clear();
-        }
-        seqlock.end_write();
-
-        return write_race == parallel || write_race == within;
-    }
-
-    __attribute__((always_inline))
     bool does_read_race(const os_label &reader) {
         uint32_t seq;
         bool is_same_reader = false;
@@ -109,37 +54,9 @@ class alignas(64) shadow_label {
     }
 
     // Slow path: We have to update something and therefore check races.
-    __attribute__((noinline, cold, preserve_most))
-    bool does_write_race_slow(const os_label &writer) {
-        range_check read_race;
-        range_check write_race;
+    __attribute__((visibility("default")))
+    bool does_write_race_slow(const os_label &writer);
 
-        seqlock.begin_write();
-        // To detect read-write races, we compare against the range of possible readers.
-        read_race = last_reader_range.is_empty()
-                        ? synced
-                        : writer.range_relation(last_reader_range, is_range);
-        // To detect write-write races, we compare against the last writer
-        // (and set ourselves as last writer)
-        write_race = last_writer.is_empty()
-                         ? synced
-                         : writer.range_relation(last_writer, false);
-        // Do not modify unless we have to :)
-        if (write_race != identical) {
-            last_writer.copy_from(writer);
-        }
-        // Our reader is in series with our writer. Thus, we can prune it, as races are impossible.
-        if (read_race == synced) {
-            last_reader_range.clear();
-            is_range = false;
-        }
-        seqlock.end_write();
-
-        return (read_race == parallel || read_race == within) ||
-               (write_race == parallel || write_race == within);
-    }
-
-    __attribute__((always_inline))
     bool does_write_race(const os_label &writer) {
         // Optimistically read the last_writer:
         // If the writer hasn't changed, then we can simply leave.

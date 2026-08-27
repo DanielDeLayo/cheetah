@@ -60,7 +60,7 @@ struct os_label {
         return min_blocks;
     }
 
-    __attribute__((noinline, cold, preserve_most))
+    __attribute__((visibility("default")))
     bool is_identical_slow(const os_label &rhs) const {
         size_t min_blocks = offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
@@ -80,7 +80,6 @@ struct os_label {
         return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
     }
 
-    __attribute__((always_inline))
     bool is_identical(const os_label &rhs) const {
         if (offset != rhs.offset)
             return false;
@@ -108,7 +107,11 @@ struct os_label {
     }
 
     bool is_serial() const {
-        return offset == 0;
+        for (size_t i = 0; i < offset; i++) {
+            if ((get_block(i) & 8) == 0)
+                return false;
+        }
+        return true;
     }
 
     // Finds the start of the level containing block 'i'
@@ -293,6 +296,7 @@ struct os_label {
     }
 
     // Should fixup LCA range?
+    __attribute__((visibility("default")))
     range_check range_relation(const os_label &rhs, const bool &is_range) const {
         if (__builtin_expect(rhs.is_empty(), 0)) {
             if (is_empty())
@@ -308,13 +312,12 @@ struct os_label {
         if (__builtin_expect(i == offset + 1 && i == rhs.offset + 1, 0))
             return identical;
 
-        if (i == rhs.offset + 1) // rhs is prefix of this -> this is descendent
+        if (i == rhs.offset + 1)
             return is_range ? within : synced;
 
-        if (i == offset + 1) // this is prefix of rhs -> this is ancestor
+        if (i == offset + 1)
             return is_range ? within : synced;
 
-        // Check if parallel
         if (i == 0 || (get_block(i - 1) & 8) == 0) {
             uint8_t mask = (i & 1) ? 0x10 : 0x01;
             if ((data[i >> 1] ^ rhs.data[i >> 1]) & mask)
