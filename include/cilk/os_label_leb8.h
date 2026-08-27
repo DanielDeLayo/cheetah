@@ -60,16 +60,15 @@ struct os_label {
         return min_blocks;
     }
 
-    bool is_identical(const os_label &rhs) const {
-        if (offset != rhs.offset)
-            return false;
+    __attribute__((noinline, cold, preserve_most))
+    bool is_identical_slow(const os_label &rhs) const {
         size_t min_blocks = offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
         size_t num_words = (min_bytes + 7) >> 3;
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
         const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
 
-        for (size_t i = 0; i < num_words - 1; i++) {
+        for (size_t i = 1; i < num_words - 1; i++) {
             if (w1[i] != w2[i])
                 return false;
         }
@@ -79,6 +78,22 @@ struct os_label {
         uint64_t mask =
             (rem_blocks == 16) ? ~0ULL : ((1ULL << (rem_blocks * 4)) - 1);
         return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
+    }
+
+    __attribute__((always_inline))
+    bool is_identical(const os_label &rhs) const {
+        if (offset != rhs.offset)
+            return false;
+        const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
+        const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
+        if (__builtin_expect(offset < 15, 1)) {
+            uint64_t mask = (1ULL << ((offset + 1) << 2)) - 1;
+            return ((w1[0] ^ w2[0]) & mask) == 0;
+        }
+        if (offset == 15) {
+            return w1[0] == w2[0];
+        }
+        return is_identical_slow(rhs);
     }
 
     void copy_from(const os_label &src) {

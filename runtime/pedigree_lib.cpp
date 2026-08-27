@@ -84,7 +84,7 @@ uint64_t __cilkrts_get_dprand(void) noexcept {
 
 // Get the current os_label pointer directly.
 extern "C"
-const os_label *__cilkrts_get_current_os_label(void) noexcept {
+const os_label *__cilkrts_get_current_os_label(void) noexcept __CILKRTS_PRESERVE_MOST {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
     if (__builtin_expect(!w || !w->extension, 0))
         return nullptr;

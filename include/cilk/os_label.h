@@ -27,7 +27,7 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((noinline))
+    __attribute__((noinline, cold, preserve_most))
     bool does_read_race_slow(const os_label &reader) {
         range_check read_race;
         range_check write_race;
@@ -77,38 +77,24 @@ class alignas(64) shadow_label {
 
     __attribute__((always_inline))
     bool does_read_race(const os_label &reader) {
-        range_check read_race;
-        range_check write_race;
         uint32_t seq;
+        bool is_same_reader = false;
 
-        // To detect read-write races, we compare against the last writer and reader range.
-        // We start with a fastpath readonly check
+        // fastpath check
         do {
             seq = seqlock.begin_read();
-            if (last_writer.is_empty() || reader.is_identical(last_writer)) {
-                write_race = synced;
-            } else {
-                write_race = reader.range_relation(last_writer, false);
-            }
-            if (!is_range && reader.is_identical(last_reader_range)) {
-                read_race = identical;
-            } else {
-                read_race = last_reader_range.is_empty()
-                                ? synced
-                                : reader.range_relation(last_reader_range, is_range);
-            }
+            is_same_reader = !is_range && reader.is_identical(last_reader_range);
         } while (!seqlock.read_was_safe(seq));
 
-        // We may need to update if we're not within or identical
-        if (__builtin_expect(read_race != synced && read_race != parallel, 1)) {
-            return write_race == parallel || write_race == within;
+        if (__builtin_expect(is_same_reader, 1)) {
+            return false;
         }
 
         return does_read_race_slow(reader);
     }
 
     // Slow path: We have to update something and therefore check races.
-    __attribute__((noinline))
+    __attribute__((noinline, cold, preserve_most))
     bool does_write_race_slow(const os_label &writer) {
         range_check read_race;
         range_check write_race;

@@ -5,6 +5,12 @@
 #include <cstdint>
 #include <sched.h>
 
+// This isolates sched_yield's calling convention to this function for better inlining and preserve_most
+__attribute__((noinline, cold, preserve_most))
+static inline void seqlock_yield() {
+    sched_yield();
+}
+
 class atomic_seqlock {
     // We store a has_writer boolean in the low-order bit
     std::atomic<uint32_t> seq{0};
@@ -27,7 +33,7 @@ class atomic_seqlock {
                 __builtin_arm_yield();
                 #endif
                 if (__builtin_expect(++spin > 64, 0)) {
-                    sched_yield();
+                    seqlock_yield();
                     spin = 0;
                 }
             }
@@ -51,7 +57,7 @@ class atomic_seqlock {
             __builtin_ia32_pause();
             #endif
             if (__builtin_expect(++spin > 64, 0)) {
-                sched_yield();
+                seqlock_yield();
                 spin = 0;
             }
             ret = seq.load(std::memory_order_relaxed);

@@ -29,7 +29,13 @@ typedef struct __cilkrts_os_label {
 } __cilkrts_os_label;
 __cilkrts_pedigree __cilkrts_get_pedigree(void) __CILKRTS_NOTHROW;
 __cilkrts_os_label __cilkrts_get_os_label(void) __CILKRTS_NOTHROW;
-const struct os_label *__cilkrts_get_current_os_label(void) __CILKRTS_NOTHROW;
+#if defined(__clang__)
+#define __CILKRTS_PRESERVE_MOST __attribute__((preserve_most))
+#else
+#define __CILKRTS_PRESERVE_MOST
+#endif
+
+const struct os_label *__cilkrts_get_current_os_label(void) __CILKRTS_NOTHROW __CILKRTS_PRESERVE_MOST;
 void __cilkrts_restore_os_label_on_sync(void) __CILKRTS_NOTHROW;
 void __cilkrts_bump_worker_rank(void) __CILKRTS_NOTHROW;
 void __cilkrts_dprand_set_seed(uint64_t seed) __CILKRTS_NOTHROW;
