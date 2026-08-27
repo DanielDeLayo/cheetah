@@ -38,12 +38,8 @@ class alignas(64) shadow_label {
         // lock. If someone else has already expanded to cover us, we can stop
         // early, since reader-writer checks are atomic.
         seqlock.begin_write();
-        // First, grab an updated view
-        if (last_writer.is_empty() || reader.is_identical(last_writer)) {
-            write_race = synced;
-        } else {
-            write_race = reader.range_relation(last_writer, false);
-        }
+
+        // Check if covered by current reader range
         if (!is_range && reader.is_identical(last_reader_range)) {
             read_race = identical;
         } else {
@@ -51,12 +47,22 @@ class alignas(64) shadow_label {
                             ? synced
                             : reader.range_relation(last_reader_range, is_range);
         }
-        // Determine if we need to update any information
-        switch (read_race) {
-        case within:
-        case identical:
+
+        // If reader is within LCA range or identical, we don't need to update
+        // the range or inspect the write register; release lock and return.
+        if (read_race == within || read_race == identical) {
             seqlock.end_write();
-            return write_race == parallel || write_race == within;
+            return false;
+        }
+
+        // We need to update the reader range. Check write race now.
+        if (last_writer.is_empty() || reader.is_identical(last_writer)) {
+            write_race = synced;
+        } else {
+            write_race = reader.range_relation(last_writer, false);
+        }
+
+        switch (read_race) {
         case synced:
             last_reader_range.copy_from(reader);
             is_range = false;
@@ -65,7 +71,10 @@ class alignas(64) shadow_label {
             is_range = true;
             reader.expand_parallel_range(last_reader_range);
             break;
+        default:
+            break;
         }
+
         // Our reader is in series with last_writer. Thus, we can prune last_writer.
         if (write_race == synced) {
             last_writer.clear();
@@ -80,10 +89,16 @@ class alignas(64) shadow_label {
         uint32_t seq;
         bool is_same_reader = false;
 
-        // fastpath check
+        // Fastpath check: if reader is identical to last_reader_range or within the
+        // parallel LCA range, do not acquire write lock and do not touch write register.
         do {
             seq = seqlock.begin_read();
-            is_same_reader = !is_range && reader.is_identical(last_reader_range);
+            if (__builtin_expect(!is_range, 1)) {
+                is_same_reader = reader.is_identical(last_reader_range);
+            } else {
+                range_check rel = reader.range_relation(last_reader_range, true);
+                is_same_reader = (rel == within || rel == identical);
+            }
         } while (!seqlock.read_was_safe(seq));
 
         if (__builtin_expect(is_same_reader, 1)) {
