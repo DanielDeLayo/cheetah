@@ -83,6 +83,11 @@ struct os_label {
 
     void copy_from(const os_label &src) {
         offset = src.offset;
+        if (__builtin_expect(src.offset < 15, 1)) {
+            *reinterpret_cast<uint64_t *>(data) =
+                *reinterpret_cast<const uint64_t *>(src.data);
+            return;
+        }
         size_t bytes = (src.offset + 2) >> 1;
         memcpy(data, src.data, bytes);
     }
@@ -96,45 +101,30 @@ struct os_label {
         if (i == 0)
             return 0;
 
-        size_t level_start = i;
+        const uint64_t *w = reinterpret_cast<const uint64_t *>(data);
+        size_t word_idx = i >> 4;
+        size_t rem = i & 15;
 
-        // Block-by-block if i is odd (not aligned to byte)
-        if ((level_start & 1) == 1) {
-            if ((get_block(level_start - 1) & 8) == 0)
-                return level_start;
-            level_start--;
-        }
-
-        if (level_start == 0)
-            return 0;
-
-        // Scan backwards byte-by-byte
-        size_t byte_idx = (level_start >> 1) - 1;
-        while (true) {
-            uint8_t b = data[byte_idx];
-            if ((b & 0x80) == 0) // Upper block C is 0
-                return (byte_idx << 1) + 2;
-            if ((b & 0x08) == 0) // Lower block C is 0
-                return (byte_idx << 1) + 1;
-            if (byte_idx == 0)
-                break;
-            byte_idx--;
-        }
-        return 0;
-    }
-
-    void push_level(uint64_t V) {
-        do {
-            if (offset + 1 >= max_blocks) {
-                fprintf(stderr, "[CilkPrace Error] Label length overflow!\n");
-                exit(EXIT_FAILURE);
+        if (rem > 0) {
+            uint64_t valid_mask = (1ULL << (rem * 4)) - 1;
+            uint64_t c_zeros =
+                (~w[word_idx] & 0x8888888888888888ULL) & valid_mask;
+            if (c_zeros != 0) {
+                return (word_idx << 4) +
+                       ((63 - __builtin_clzll(c_zeros)) >> 2) + 1;
             }
-            uint8_t payload = V & 7;
-            V >>= 3;
-            uint8_t continuation = (V > 0) ? 1 : 0;
-            offset++;
-            set_block(offset, (continuation << 3) | payload);
-        } while (V > 0);
+        }
+
+        while (word_idx > 0) {
+            word_idx--;
+            uint64_t c_zeros = ~w[word_idx] & 0x8888888888888888ULL;
+            if (c_zeros != 0) {
+                return (word_idx << 4) +
+                       ((63 - __builtin_clzll(c_zeros)) >> 2) + 1;
+            }
+        }
+
+        return 0;
     }
 
   public:
@@ -144,9 +134,31 @@ struct os_label {
         data[0] = 0;
     }
 
-    void append_left_child() { push_level(0); }
+    void append_left_child() {
+        if (__builtin_expect(offset + 1 >= max_blocks, 0)) {
+            fprintf(stderr, "[CilkPrace Error] Label length overflow!\n");
+            exit(EXIT_FAILURE);
+        }
+        offset++;
+        if ((offset & 1) == 0) {
+            data[offset >> 1] &= 0xF0;
+        } else {
+            data[offset >> 1] &= 0x0F;
+        }
+    }
 
-    void append_right_child() { push_level(1); }
+    void append_right_child() {
+        if (__builtin_expect(offset + 1 >= max_blocks, 0)) {
+            fprintf(stderr, "[CilkPrace Error] Label length overflow!\n");
+            exit(EXIT_FAILURE);
+        }
+        offset++;
+        if ((offset & 1) == 0) {
+            data[offset >> 1] = (data[offset >> 1] & 0xF0) | 0x01;
+        } else {
+            data[offset >> 1] = (data[offset >> 1] & 0x0F) | 0x10;
+        }
+    }
 
     __attribute__((always_inline)) void restore_on_sync(uint8_t conts) {
         if (conts == 0)
