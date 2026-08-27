@@ -80,6 +80,7 @@ struct os_label {
         return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
     }
 
+    __attribute__((always_inline))
     bool is_identical(const os_label &rhs) const {
         if (offset != rhs.offset)
             return false;
