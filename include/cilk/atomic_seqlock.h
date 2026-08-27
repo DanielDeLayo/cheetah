@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <sched.h>
 
 class atomic_seqlock {
     // We store a has_writer boolean in the low-order bit
@@ -10,6 +11,7 @@ class atomic_seqlock {
 
   public:
     void begin_write() {
+        int spin = 0;
         while (true) {
             uint32_t s = seq.load(std::memory_order_relaxed);
             if ((s & 1) == 0) { // no writer
@@ -24,6 +26,10 @@ class atomic_seqlock {
                 #elif defined(__aarch64__)
                 __builtin_arm_yield();
                 #endif
+                if (__builtin_expect(++spin > 64, 0)) {
+                    sched_yield();
+                    spin = 0;
+                }
             }
         }
     }
@@ -37,12 +43,17 @@ class atomic_seqlock {
         // While odd (has writer) yield loop
         // This is a weak operation; so, we can read with just atomicity
         uint32_t ret = seq.load(std::memory_order_relaxed);
+        int spin = 0;
         while (__builtin_expect(ret & 1, 0)) {
             #if defined(__aarch64__)
             __builtin_arm_yield();
             #elif defined(__x86_64__) || defined(__i386__)
             __builtin_ia32_pause();
             #endif
+            if (__builtin_expect(++spin > 64, 0)) {
+                sched_yield();
+                spin = 0;
+            }
             ret = seq.load(std::memory_order_relaxed);
         }
         // and declare that we've acquired a resource (barrier)

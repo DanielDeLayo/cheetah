@@ -265,15 +265,16 @@ struct os_label {
             return false;
         }
 
+        // Fast-path: if block i is the start of a level
+        if (i == 0 || (get_block(i - 1) & 8) == 0) {
+            uint8_t mask = (i & 1) ? 0x10 : 0x01;
+            return ((data[i >> 1] ^ rhs.data[i >> 1]) & mask) != 0;
+        }
+
         // Find the start of the diverging level
         size_t level_start = find_level_start(i);
-
-        uint8_t my_dir =
-            (data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
-        uint8_t rhs_dir =
-            (rhs.data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
-
-        return my_dir != rhs_dir;
+        uint8_t mask = (level_start & 1) ? 0x10 : 0x01;
+        return ((data[level_start >> 1] ^ rhs.data[level_start >> 1]) & mask) != 0;
     }
 
     // Should fixup LCA range?
@@ -299,14 +300,16 @@ struct os_label {
             return is_range ? within : synced;
 
         // Check if parallel
+        if (i == 0 || (get_block(i - 1) & 8) == 0) {
+            uint8_t mask = (i & 1) ? 0x10 : 0x01;
+            if ((data[i >> 1] ^ rhs.data[i >> 1]) & mask)
+                return parallel;
+            return synced;
+        }
+
         size_t level_start = find_level_start(i);
-
-        uint8_t my_dir =
-            (data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
-        uint8_t rhs_dir =
-            (rhs.data[level_start >> 1] >> ((level_start & 1) ? 4 : 0)) & 1;
-
-        if (my_dir != rhs_dir) {
+        uint8_t mask = (level_start & 1) ? 0x10 : 0x01;
+        if ((data[level_start >> 1] ^ rhs.data[level_start >> 1]) & mask) {
             return parallel;
         }
 
