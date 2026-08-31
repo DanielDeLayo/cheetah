@@ -27,7 +27,7 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((visibility("default")))
+    __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_read_race_slow(const os_label &reader);
 
     __attribute__((always_inline))
@@ -55,7 +55,7 @@ class alignas(64) shadow_label {
     }
 
     // Slow path: We have to update something and therefore check races.
-    __attribute__((visibility("default")))
+    __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_write_race_slow(const os_label &writer);
 
     __attribute__((always_inline))

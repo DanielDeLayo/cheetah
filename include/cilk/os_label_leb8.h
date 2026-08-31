@@ -41,26 +41,38 @@ struct os_label {
     }
 
     // Finds the exact block index where this and rhs diverge
-    size_t calc_matching_block_length(const os_label &rhs) const {
+    __attribute__((always_inline))
+    inline size_t calc_matching_block_length(const os_label &rhs) const {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
         size_t min_blocks = min_offset + 1;
-        size_t min_bytes = (min_blocks + 1) >> 1;
-        size_t num_words = (min_bytes + 7) >> 3;
-
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
         const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
 
-        for (size_t i = 0; i < num_words; i++) {
+        uint64_t diff = w1[0] ^ w2[0];
+        if (__builtin_expect(min_offset < 16, 1)) {
+            if (diff != 0) {
+                size_t nibble_idx = __builtin_ctzll(diff) >> 2;
+                return nibble_idx < min_blocks ? nibble_idx : min_blocks;
+            }
+            return min_blocks;
+        }
+
+        if (diff != 0) {
+            return __builtin_ctzll(diff) >> 2;
+        }
+
+        size_t min_bytes = (min_blocks + 1) >> 1;
+        size_t num_words = (min_bytes + 7) >> 3;
+        for (size_t i = 1; i < num_words; i++) {
             if (w1[i] != w2[i]) {
                 size_t nibble_idx = (i << 4) + (__builtin_ctzll(w1[i] ^ w2[i]) >> 2);
                 return nibble_idx < min_blocks ? nibble_idx : min_blocks;
             }
         }
-
         return min_blocks;
     }
 
-    __attribute__((visibility("default")))
+    __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool is_identical_slow(const os_label &rhs) const {
         size_t min_blocks = offset + 1;
         size_t min_bytes = (min_blocks + 1) >> 1;
@@ -68,7 +80,7 @@ struct os_label {
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
         const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
 
-        for (size_t i = 1; i < num_words - 1; i++) {
+        for (size_t i = 0; i < num_words - 1; i++) {
             if (w1[i] != w2[i])
                 return false;
         }
@@ -78,6 +90,50 @@ struct os_label {
         uint64_t mask =
             (rem_blocks == 16) ? ~0ULL : ((1ULL << (rem_blocks * 4)) - 1);
         return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
+    }
+
+    __attribute__((visibility("default")))
+    bool is_prefix_slow(const os_label &full) const {
+        size_t min_blocks = offset + 1;
+        size_t min_bytes = (min_blocks + 1) >> 1;
+        size_t num_words = (min_bytes + 7) >> 3;
+        const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
+        const uint64_t *w2 = reinterpret_cast<const uint64_t *>(full.data);
+
+        for (size_t i = 0; i < num_words - 1; i++) {
+            if (w1[i] != w2[i])
+                return false;
+        }
+
+        size_t last_word = num_words - 1;
+        size_t rem_blocks = min_blocks - (last_word << 4);
+        uint64_t mask =
+            (rem_blocks == 16) ? ~0ULL : ((1ULL << (rem_blocks * 4)) - 1);
+        return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
+    }
+
+    __attribute__((always_inline))
+    bool is_prefix_of(const os_label &full) const {
+        if (__builtin_expect(offset > full.offset, 0))
+            return false;
+        const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
+        const uint64_t *w2 = reinterpret_cast<const uint64_t *>(full.data);
+        if (__builtin_expect(offset < 15, 1)) {
+            uint64_t mask = (1ULL << ((offset + 1) << 2)) - 1;
+            return ((w1[0] ^ w2[0]) & mask) == 0;
+        }
+        if (offset == 15) {
+            return w1[0] == w2[0];
+        }
+        if (__builtin_expect(offset < 31, 1)) {
+            if (w1[0] != w2[0]) return false;
+            uint64_t mask = (1ULL << ((offset - 15) << 2)) - 1;
+            return ((w1[1] ^ w2[1]) & mask) == 0;
+        }
+        if (offset == 31) {
+            return w1[0] == w2[0] && w1[1] == w2[1];
+        }
+        return is_prefix_slow(full);
     }
 
     __attribute__((always_inline))
@@ -92,6 +148,14 @@ struct os_label {
         }
         if (offset == 15) {
             return w1[0] == w2[0];
+        }
+        if (__builtin_expect(offset < 31, 1)) {
+            if (w1[0] != w2[0]) return false;
+            uint64_t mask = (1ULL << ((offset - 15) << 2)) - 1;
+            return ((w1[1] ^ w2[1]) & mask) == 0;
+        }
+        if (offset == 31) {
+            return w1[0] == w2[0] && w1[1] == w2[1];
         }
         return is_identical_slow(rhs);
     }
@@ -116,16 +180,26 @@ struct os_label {
     }
 
     // Finds the start of the level containing block 'i'
-    size_t find_level_start(size_t i) const {
+    __attribute__((always_inline))
+    inline size_t find_level_start(size_t i) const {
         if (i == 0)
             return 0;
 
         const uint64_t *w = reinterpret_cast<const uint64_t *>(data);
+        if (__builtin_expect(i < 16, 1)) {
+            uint64_t valid_mask = (1ULL << (i << 2)) - 1;
+            uint64_t c_zeros = (~w[0] & 0x8888888888888888ULL) & valid_mask;
+            if (c_zeros != 0) {
+                return ((63 - __builtin_clzll(c_zeros)) >> 2) + 1;
+            }
+            return 0;
+        }
+
         size_t word_idx = i >> 4;
         size_t rem = i & 15;
 
         if (rem > 0) {
-            uint64_t valid_mask = (1ULL << (rem * 4)) - 1;
+            uint64_t valid_mask = (1ULL << (rem << 2)) - 1;
             uint64_t c_zeros =
                 (~w[word_idx] & 0x8888888888888888ULL) & valid_mask;
             if (c_zeros != 0) {
@@ -297,8 +371,8 @@ struct os_label {
     }
 
     // Should fixup LCA range?
-    __attribute__((visibility("default")))
-    range_check range_relation(const os_label &rhs, const bool &is_range) const {
+    __attribute__((always_inline))
+    inline range_check range_relation(const os_label &rhs, const bool &is_range) const {
         if (__builtin_expect(rhs.is_empty(), 0)) {
             if (is_empty())
                 return identical;

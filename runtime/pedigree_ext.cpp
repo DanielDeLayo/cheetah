@@ -87,3 +87,12 @@ void __cilkrts_extend_sync(void **extension) {
         frame->dprng_dotproduct, __pedigree_dprng_m_array[frame->dprng_depth]);
 }
 
+extern "C"
+__CILKRTS_STRAND_PURE
+const os_label *__cilkrts_get_current_os_label(void) noexcept __CILKRTS_PRESERVE_MOST {
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
+    if (__builtin_expect(!w || !w->extension, 0))
+        return nullptr;
+    return &((__pedigree_frame *)w->extension)->label;
+}
+
