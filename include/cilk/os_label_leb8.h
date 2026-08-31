@@ -221,7 +221,8 @@ struct os_label {
     }
 
   public:
-    bool is_empty() const { return offset == 0 && data[0] == 0; }
+    bool is_unraceable() const { return offset <= 1; }
+    bool is_empty() const { return is_unraceable(); }
     void clear() {
         offset = 0;
         data[0] = 0;
@@ -442,6 +443,7 @@ struct os_label {
         }
     }
 
+#ifdef ENABLE_LABEL_PRINTING
     inline friend std::ostream &operator<<(std::ostream &os,
                                            const os_label &l) {
         std::vector<uint8_t> vec = l.to_vector();
@@ -450,6 +452,7 @@ struct os_label {
             os << " " << v;
         return os;
     }
+#endif
 };
 
 #endif // _OS_LABEL_LEB8_H

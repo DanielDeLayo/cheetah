@@ -78,16 +78,20 @@ class alignas(64) shadow_label {
         return does_write_race_slow(writer);
     }
 
+#ifdef ENABLE_LABEL_PRINTING
     inline friend std::ostream &operator<<(std::ostream &os,
                                            const shadow_label &l);
+#endif
 };
 
+#ifdef ENABLE_LABEL_PRINTING
 inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
     os << "Last Writer: " << l.last_writer << std::endl;
     os << (l.is_range ? "Range" : "Point") << " Reader: " << l.last_reader_range
        << std::endl;
     return os;
 }
+#endif
 
 static_assert(sizeof(shadow_label) == 128, "shadow_label must be 128 bytes");
 
