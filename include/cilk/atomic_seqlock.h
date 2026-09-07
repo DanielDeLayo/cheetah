@@ -9,10 +9,10 @@
 
 class atomic_seqlock {
   public:
-    __attribute__((always_inline)) void begin_write() {}
-    __attribute__((always_inline)) void end_write() {}
-    __attribute__((always_inline)) uint32_t begin_read() { return 0; }
-    __attribute__((always_inline)) bool read_was_safe(uint32_t old_seq) const { return true; }
+    inline void begin_write() {}
+    inline void end_write() {}
+    inline uint32_t begin_read() { return 0; }
+    inline bool read_was_safe(uint32_t old_seq) const { return true; }
 };
 
 #else
@@ -46,8 +46,7 @@ class atomic_seqlock {
         seq.store(seq.load(std::memory_order_relaxed) + 1, std::memory_order_release);
     }
 
-    __attribute__((always_inline))
-    uint32_t begin_read() {
+    inline uint32_t begin_read() {
         // This is a weak operation; so, we can read with just atomicity
         uint32_t ret = seq.load(std::memory_order_relaxed);
         while (__builtin_expect(ret & 1, 0)) {

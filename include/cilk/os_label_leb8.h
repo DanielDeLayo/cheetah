@@ -41,7 +41,6 @@ struct os_label {
     }
 
     // Finds the exact block index where this and rhs diverge
-    __attribute__((always_inline))
     inline size_t calc_matching_block_length(const os_label &rhs) const {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
         size_t min_blocks = min_offset + 1;
@@ -112,8 +111,7 @@ struct os_label {
         return ((w1[last_word] ^ w2[last_word]) & mask) == 0;
     }
 
-    __attribute__((always_inline))
-    bool is_prefix_of(const os_label &full) const {
+    inline bool is_prefix_of(const os_label &full) const {
         if (__builtin_expect(offset > full.offset, 0))
             return false;
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
@@ -136,8 +134,7 @@ struct os_label {
         return is_prefix_slow(full);
     }
 
-    __attribute__((always_inline))
-    bool is_identical(const os_label &rhs) const {
+    inline bool is_identical(const os_label &rhs) const {
         if (offset != rhs.offset)
             return false;
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
@@ -180,7 +177,6 @@ struct os_label {
     }
 
     // Finds the start of the level containing block 'i'
-    __attribute__((always_inline))
     inline size_t find_level_start(size_t i) const {
         if (i == 0)
             return 0;
@@ -254,7 +250,7 @@ struct os_label {
         }
     }
 
-    __attribute__((always_inline)) void restore_on_sync(uint8_t conts) {
+    inline void restore_on_sync(uint8_t conts) {
         if (conts == 0)
             return;
 
@@ -372,7 +368,6 @@ struct os_label {
     }
 
     // Should fixup LCA range?
-    __attribute__((always_inline))
     inline range_check range_relation(const os_label &rhs, const bool &is_range) const {
         if (__builtin_expect(rhs.is_empty(), 0)) {
             if (is_empty())

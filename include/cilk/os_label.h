@@ -30,8 +30,7 @@ class alignas(64) shadow_label {
     __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_read_race_slow(const os_label &reader);
 
-    __attribute__((always_inline))
-    bool does_read_race(const os_label &reader) {
+    inline bool does_read_race(const os_label &reader) {
         uint32_t seq;
         bool is_same_reader = false;
 
@@ -58,8 +57,7 @@ class alignas(64) shadow_label {
     __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_write_race_slow(const os_label &writer);
 
-    __attribute__((always_inline))
-    bool does_write_race(const os_label &writer) {
+    inline bool does_write_race(const os_label &writer) {
         // Optimistically read the last_writer:
         // If the writer hasn't changed, then we can simply leave.
         // After all, any intervening reader already checked against this writer.

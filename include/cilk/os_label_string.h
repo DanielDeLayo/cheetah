@@ -101,7 +101,7 @@ struct os_label {
     // conts. But there's a problem because this is called without a promise
     // that it's real. Just the keyword. 
     // We have to reset and store conts every time we enter a new cilked function that may spawn.
-    __attribute__((always_inline)) void restore_on_sync(uint8_t conts) {
+    inline void restore_on_sync(uint8_t conts) {
         if (conts == 0)
             return;
         // Clear left child
