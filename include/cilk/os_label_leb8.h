@@ -434,12 +434,11 @@ struct os_label {
         size_t i = calc_matching_block_length(rhs);
         size_t level_start = find_level_start(i);
 
-        // Truncate rhs to the LCA continuation
-        rhs.offset = level_start;
-        if ((level_start & 1) == 0) {
-            rhs.data[level_start >> 1] &= 0xF0;
+        if (level_start == 0) {
+            rhs.clear();
         } else {
-            rhs.data[level_start >> 1] &= 0x0F;
+            // Truncate rhs to the LCA continuation
+            rhs.offset = level_start - 1;
         }
     }
 
