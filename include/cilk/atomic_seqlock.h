@@ -1,6 +1,8 @@
 #ifndef _ATOMIC_SEQLOCK_H
 #define _ATOMIC_SEQLOCK_H
 
+#pragma GCC visibility push(default)
+
 #include <atomic>
 #include <cstdint>
 #include <sched.h>
@@ -71,5 +73,7 @@ class atomic_seqlock {
 };
 
 #endif // !SERIAL_TOOL
+
+#pragma GCC visibility pop
 
 #endif // _ATOMIC_SEQLOCK_H

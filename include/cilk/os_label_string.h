@@ -1,6 +1,8 @@
 #ifndef _OS_LABEL_STRING_H
 #define _OS_LABEL_STRING_H
 
+#pragma GCC visibility push(default)
+
 #include <cstddef>
 #include <cstdint>
 #include <stdio.h>
@@ -64,8 +66,11 @@ struct os_label {
     // Encoding: offset-span labeling DOI:10.1145/125826.125861
     // TODO: 2 value bits, 1 child-direction bit, and 1 continuation bit
     // TODO: Gray code stuff? Right align, grow left, etc.
-    bool is_empty() const {
+    bool is_unraceable() const {
         return offset == 0 && labels[0] == 0;
+    }
+    bool is_empty() const {
+        return is_unraceable();
     }
     void clear() {
         offset = 0;
@@ -101,16 +106,7 @@ struct os_label {
     // conts. But there's a problem because this is called without a promise
     // that it's real. Just the keyword. 
     // We have to reset and store conts every time we enter a new cilked function that may spawn.
-    inline void restore_on_sync(uint8_t conts) {
-        if (conts == 0)
-            return;
-        // Clear left child
-        for (; conts > 0; conts--)
-            labels[offset--] = 0;
-        // Increment Parent
-        check_label_value_overflow(labels[offset], 2, UINT8_MAX);
-        labels[offset] += 2;
-    }
+    void restore_on_sync(uint8_t conts);
 
     size_t inline calc_matching_prefix_length(const os_label &rhs) const {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;
@@ -169,24 +165,8 @@ struct os_label {
 
     // Should fixup LCA range?
     range_check range_relation(const os_label &rhs,
-                               const bool &is_range) const {
-        // This function handles multiple cases
-        // 1. We have synced since the rhs label
-        // 2. We are a descendent of the rhs label
-        // 3. We are in parallel with the rhs label but outside the range
-        size_t num_matches = calc_matching_prefix_length(rhs);
+                               const bool &is_range) const;
 
-        // Case 1: same
-        if (num_matches == offset + 1 && offset == rhs.offset)
-            return identical;
-        // Case 2: descendent
-        if (num_matches == offset + 1 || num_matches == rhs.offset + 1)
-            return is_range ? within : synced;
-        // Case 3: parallel
-        if (is_parallel(rhs))
-            return parallel;
-        return synced;
-    }
 
     // Return a clean vector of the current label values
     std::vector<uint8_t> to_vector() const {
@@ -218,5 +198,7 @@ struct os_label {
         return os;
     }
 };
+
+#pragma GCC visibility pop
 
 #endif // _OS_LABEL_STRING_H

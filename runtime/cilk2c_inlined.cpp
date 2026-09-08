@@ -18,6 +18,7 @@
 #include "init.h"
 #include "local-reducer-api.h"
 #include "pedigree_ext.cpp"
+#include "os_label.cpp"
 #include "worker.h"
 #include <atomic>
 #include <unwind.h>

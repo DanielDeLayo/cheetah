@@ -1,6 +1,8 @@
 #ifndef _OS_LABEL_H
 #define _OS_LABEL_H
 
+#pragma GCC visibility push(default)
+
 #include "atomic_seqlock.h"
 #include <ostream>
 
@@ -30,51 +32,13 @@ class alignas(64) shadow_label {
     __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_read_race_slow(const os_label &reader);
 
-    inline bool does_read_race(const os_label &reader) {
-        uint32_t seq;
-        bool is_same_reader = false;
-
-        // Fastpath check: if reader is identical to last_reader_range or within the
-        // parallel LCA range, do not acquire write lock and do not touch write register.
-        do {
-            seq = seqlock.begin_read();
-            if (__builtin_expect(!is_range, 1)) {
-                is_same_reader = reader.is_identical(last_reader_range);
-            } else {
-                range_check rel = reader.range_relation(last_reader_range, true);
-                is_same_reader = (rel == within || rel == identical);
-            }
-        } while (!seqlock.read_was_safe(seq));
-
-        if (__builtin_expect(is_same_reader, 1)) {
-            return false;
-        }
-
-        return does_read_race_slow(reader);
-    }
+    bool does_read_race(const os_label &reader);
 
     // Slow path: We have to update something and therefore check races.
     __attribute__((noinline, cold, preserve_most, visibility("default")))
     bool does_write_race_slow(const os_label &writer);
 
-    inline bool does_write_race(const os_label &writer) {
-        // Optimistically read the last_writer:
-        // If the writer hasn't changed, then we can simply leave.
-        // After all, any intervening reader already checked against this writer.
-        uint32_t seq;
-        bool is_same_writer = false;
-
-        do {
-            seq = seqlock.begin_read();
-            is_same_writer = writer.is_identical(last_writer);
-        } while (!seqlock.read_was_safe(seq));
-
-        if (__builtin_expect(is_same_writer, 1)) {
-            return false;
-        }
-
-        return does_write_race_slow(writer);
-    }
+    bool does_write_race(const os_label &writer);
 
 #ifdef ENABLE_LABEL_PRINTING
     inline friend std::ostream &operator<<(std::ostream &os,
@@ -92,5 +56,7 @@ inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
 #endif
 
 static_assert(sizeof(shadow_label) == 128, "shadow_label must be 128 bytes");
+
+#pragma GCC visibility pop
 
 #endif /* _OS_LABEL_H */
