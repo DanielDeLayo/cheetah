@@ -8,14 +8,14 @@
 #include "os_label_leb8.h"
 //#include "os_label_string.h"
 
+#pragma pack(push, 2)
 class alignas(64) shadow_label {
-    os_label last_writer;
-    os_label last_reader_range;
+    os_label active_reader;
+    uint16_t write_depth = 0;
     // Use a reader-writer lock
     // That is, hold exclusive and shared access for the labels.
     // Except, those are too big, so let's use a retry-seqlock instead.
     atomic_seqlock seqlock;
-    bool is_range = false;
 
   public:
     /*
@@ -27,55 +27,41 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((noinline, cold, preserve_most, visibility("default")))
-    bool does_read_race_slow(const os_label &reader);
-
-    __attribute__((always_inline))
+    __attribute__((noinline))
     bool does_read_race(const os_label &reader) {
-        uint32_t seq;
-        bool is_same_reader = false;
-
-        // Fastpath check: if reader is identical to last_reader_range or within the
-        // parallel LCA range, do not acquire write lock and do not touch write register.
-        do {
-            seq = seqlock.begin_read();
-            if (__builtin_expect(!is_range, 1)) {
-                is_same_reader = reader.is_identical(last_reader_range);
-            } else {
-                range_check rel = reader.range_relation(last_reader_range, true);
-                is_same_reader = (rel == within || rel == identical);
-            }
-        } while (!seqlock.read_was_safe(seq));
-
-        if (__builtin_expect(is_same_reader, 1)) {
-            return false;
+        unsigned lca_depth = active_reader.lca(reader);
+        if (lca_depth > write_depth) {
+            write_depth = lca_depth;
         }
-
-        return does_read_race_slow(reader);
+        if (write_depth % 4 == 3) {
+            return true;
+        }
+        if (lca_depth % 4 != 3) {
+            active_reader = reader;
+        } else {
+            // Technically unnecessary for one-worker execution, but could help
+            // prune later lca calls
+            active_reader.end_idx = lca_depth;
+        }
+        return false;
     }
 
-    // Slow path: We have to update something and therefore check races.
-    __attribute__((noinline, cold, preserve_most, visibility("default")))
-    bool does_write_race_slow(const os_label &writer);
-
-    __attribute__((always_inline))
+    __attribute__((noinline))
     bool does_write_race(const os_label &writer) {
-        // Optimistically read the last_writer:
-        // If the writer hasn't changed, then we can simply leave.
-        // After all, any intervening reader already checked against this writer.
-        uint32_t seq;
-        bool is_same_writer = false;
-
-        do {
-            seq = seqlock.begin_read();
-            is_same_writer = writer.is_identical(last_writer);
-        } while (!seqlock.read_was_safe(seq));
-
-        if (__builtin_expect(is_same_writer, 1)) {
-            return false;
+        unsigned lca_depth = active_reader.lca(writer);
+        if (lca_depth > write_depth) {
+            write_depth = lca_depth;
         }
-
-        return does_write_race_slow(writer);
+        if (write_depth % 4 == 3) {
+            return true;
+        }
+        if (lca_depth % 4 != 3) {
+            active_reader = writer;
+            write_depth = writer.end_idx;
+        } else {
+            return true;
+        }
+        return false;
     }
 
 #ifdef ENABLE_LABEL_PRINTING
@@ -83,6 +69,7 @@ class alignas(64) shadow_label {
                                            const shadow_label &l);
 #endif
 };
+#pragma pack(pop)
 
 #ifdef ENABLE_LABEL_PRINTING
 inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
@@ -93,6 +80,7 @@ inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
 }
 #endif
 
-static_assert(sizeof(shadow_label) == 128, "shadow_label must be 128 bytes");
+static_assert(sizeof(os_label) == 58, "os_label must be 58 bytes");
+static_assert(sizeof(shadow_label) == 64, "shadow_label must be 64 bytes");
 
 #endif /* _OS_LABEL_H */

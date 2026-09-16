@@ -10,12 +10,87 @@ static const uint64_t DPRNG_PRIME = (uint64_t)(-59);
 extern uint64_t *__pedigree_dprng_m_array;
 extern uint64_t __pedigree_dprng_seed;
 
+class __cilkrts_os_label_internal : public os_label {
+public:
+  uint16_t restore_idx;
+  static constexpr int scan_max_low_offset_bytes = sizeof(data) - sizeof(uint64_t);
+
+  inline void append_left_child() {
+    int scan_low_offset_bytes = end_idx / 8;
+
+    if (scan_low_offset_bytes > scan_max_low_offset_bytes) {
+      scan_low_offset_bytes = scan_max_low_offset_bytes;
+    }
+
+    uint64_t* scan_low_addr = (uint64_t*)((uint8_t*)data + scan_low_offset_bytes);
+
+    uint64_t scan_val = *scan_low_addr;
+    uint64_t scan_low_idx = end_idx - scan_low_offset_bytes * 8;
+    assert(scan_low_idx < 64);
+
+    uint64_t scan_val_capped = scan_val | 1ull << scan_low_idx;
+    int high_set_idx = 63 - __builtin_clzll(scan_val_capped);
+    // We need to round up from high_set_idx to the start of the next S group.
+    // ----. .-----. .-----.
+    //     | v     | v     |
+    //   .-'-.   .-'-.   .-'-.
+    // P S S S P S S S P S S S
+    // ^       ^       ^
+    // '-------'-------'---- P bits should be 0, so they don't matter
+    end_idx = (high_set_idx | 3) + 1 + scan_low_offset_bytes * 8;
+
+    assert(end_idx <= sizeof(data) * 8);
+  }
+
+  inline void start_new_frame() {
+    restore_idx = end_idx;
+  }
+
+  inline void set_right_child() {
+    assert(end_idx % 4 == 0);
+    assert(end_idx > 0);
+    uint64_t p_idx = end_idx - 1;
+    data[p_idx / 64ull] |= 1ull << (p_idx % 64ull);
+  }
+
+  inline void restore_on_sync() {
+    int scan_low_offset_bytes = restore_idx / 8;
+
+    if (scan_low_offset_bytes > scan_max_low_offset_bytes) {
+      scan_low_offset_bytes = scan_max_low_offset_bytes;
+    }
+
+    uint64_t* scan_low_addr = (uint64_t*)((uint8_t*)data + scan_low_offset_bytes);
+    uint64_t scan_low_idx = restore_idx - scan_low_offset_bytes * 8;
+    assert(scan_low_idx < 64);
+    assert(scan_low_idx % 4 == 0);
+
+    uint64_t scan_val = *scan_low_addr;
+    uint64_t p_mask = 0x8888888888888888ull << scan_low_idx;
+
+    // Clear continuations
+    uint64_t conts = scan_val & p_mask;
+    scan_val &= ~conts & (conts - 1);
+
+    // Increment s value.
+    // Temporarily set more significant p bits to propagate carry.
+    scan_val |= p_mask;
+    scan_val += 1 << scan_low_idx;
+    scan_val &= ~p_mask;
+
+    *scan_low_addr = scan_val;
+
+    assert(end_idx - restore_idx <= 64 && "I haven't done the logic for longer end_idx-restore_idx offsets. Probably need a loop.");
+    end_idx = restore_idx;
+  }
+};
+
 typedef struct __pedigree_frame {
     __cilkrts_pedigree pedigree; // Fields for pedigrees.
     int64_t rank;
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
-    os_label label;
+    __cilkrts_os_label_internal label;
 } __pedigree_frame;
 
 ///////////////////////////////////////////////////////////////////////////
