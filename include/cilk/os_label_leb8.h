@@ -51,7 +51,7 @@ inline std::ostream &operator<<(std::ostream &os, const os_label &l) {
   for (int i = 0; i < 7; i++) {
     os << std::hex << std::setw(16) << std::setfill('0') << l.data[i] << " ";
   }
-  os << ": " << l.end_idx << std::endl;
+  os << ": " << l.end_idx;
   return os;
 }
 #endif

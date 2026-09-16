@@ -5,6 +5,7 @@
 #include <cilk/cilk_api.h>
 #include <cilk/os_label.h>
 #include <cstdlib>
+#include <cstring>
 
 static const uint64_t DPRNG_PRIME = (uint64_t)(-59);
 extern uint64_t *__pedigree_dprng_m_array;
@@ -31,13 +32,13 @@ public:
     uint64_t scan_val_capped = scan_val | 1ull << scan_low_idx;
     int high_set_idx = 63 - __builtin_clzll(scan_val_capped);
     // We need to round up from high_set_idx to the start of the next S group.
-    // ----. .-----. .-----.
-    //     | v     | v     |
-    //   .-'-.   .-'-.   .-'-.
-    // P S S S P S S S P S S S
+    // -----..------..------.
+    //      |v      |v      |
+    //     .-----. .'----. .'.
+    // P C S S P C S S P C S S
     // ^       ^       ^
     // '-------'-------'---- P bits should be 0, so they don't matter
-    end_idx = (high_set_idx | 3) + 1 + scan_low_offset_bytes * 8;
+    end_idx = ((high_set_idx + 2) | 3) + 1 + scan_low_offset_bytes * 8;
 
     assert(end_idx <= sizeof(data) * 8);
   }
@@ -73,14 +74,28 @@ public:
     scan_val &= ~conts & (conts - 1);
 
     // Increment s value.
-    // Temporarily set more significant p bits to propagate carry.
+    // more significant p bits are set to propagate carry, then cleared
+    // c bits are saved so they can be restored if they
+    // participated in carry propagation.
+    uint64_t carries = scan_val & (p_mask >> 1ull);
     scan_val |= p_mask;
     scan_val += 1 << scan_low_idx;
     scan_val &= ~p_mask;
+    scan_val |= carries;
 
     *scan_low_addr = scan_val;
 
-    assert(end_idx - restore_idx <= 64 && "I haven't done the logic for longer end_idx-restore_idx offsets. Probably need a loop.");
+    uint8_t* clear_low_addr = (uint8_t*)(scan_low_addr + 1);
+
+    unsigned clear_high_offset_bytes = end_idx / 8 + sizeof(uint64_t);
+    if (clear_high_offset_bytes > sizeof(data)) {
+      clear_high_offset_bytes = sizeof(data);
+    }
+    uint8_t* clear_high_addr = (uint8_t*)data + clear_high_offset_bytes;
+    assert(clear_low_addr <= clear_high_addr);
+    // TODO: can we tune this better?
+    memset(clear_low_addr, 0, clear_high_addr - clear_low_addr);
+
     end_idx = restore_idx;
   }
 };
