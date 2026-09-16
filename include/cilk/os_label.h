@@ -10,14 +10,16 @@
 #include "os_label_leb8.h"
 //#include "os_label_string.h"
 
-class alignas(64) shadow_label {
-    os_label last_writer;
-    os_label last_reader_range;
-    // Use a reader-writer lock
-    // That is, hold exclusive and shared access for the labels.
-    // Except, those are too big, so let's use a retry-seqlock instead.
-    atomic_seqlock seqlock;
-    bool is_range = false;
+struct alignas(64) shadow_label {
+    // Cache line 0 (64 bytes): Read race fast path (fits entirely in 1 cache line)
+    os_label last_reader_range;  // 56 bytes (offset 0..55)
+    atomic_seqlock seqlock;      // 4 bytes  (offset 56..59)
+    bool is_range = false;       // 1 byte   (offset 60)
+    uint8_t _pad0[3] = {0};      // 3 bytes  (offset 61..63)
+
+    // Cache line 1 (64 bytes): Write path
+    os_label last_writer;        // 56 bytes (offset 64..119)
+    uint8_t _pad1[8] = {0};      // 8 bytes  (offset 120..127)
 
   public:
     /*
@@ -56,6 +58,15 @@ inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
 #endif
 
 static_assert(sizeof(shadow_label) == 128, "shadow_label must be 128 bytes");
+static_assert(alignof(shadow_label) == 64, "shadow_label must be 64-byte cache-line aligned");
+static_assert(__builtin_offsetof(shadow_label, last_reader_range) == 0,
+              "last_reader_range must start at offset 0 (Cache Line 0)");
+static_assert(__builtin_offsetof(shadow_label, seqlock) == 56,
+              "seqlock must be at offset 56 (Cache Line 0)");
+static_assert(__builtin_offsetof(shadow_label, is_range) == 60,
+              "is_range must be at offset 60 (Cache Line 0)");
+static_assert(__builtin_offsetof(shadow_label, last_writer) == 64,
+              "last_writer must start at offset 64 (Cache Line 1)");
 
 #pragma GCC visibility pop
 

@@ -16,12 +16,13 @@
 // in parallel
 enum range_check { synced, within, parallel, identical };
 
-struct os_label {
+struct alignas(8) os_label {
     // LEB8 encoded bit array. Each byte holds two 4-bit blocks.
     // Block format: [C (1 bit), P (3 bits)] where C is continuation.
-    uint8_t data[59] = {0};
+    uint8_t data[48] = {0};
     uint8_t offset =
         0; // Index of the last block. 0-initialized means 1 block at index 0.
+    uint8_t _pad[7] = {0};
 
     static constexpr size_t max_blocks = sizeof(data) * 2;
 
@@ -83,22 +84,19 @@ struct os_label {
             return false;
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
         const uint64_t *w2 = reinterpret_cast<const uint64_t *>(full.data);
+        uint64_t diff0 = w1[0] ^ w2[0];
+        if (__builtin_expect(diff0 == 0, 1)) {
+            if (__builtin_expect(offset <= 15, 1))
+                return true;
+            if (offset <= 31)
+                return w1[1] == w2[1] || (((w1[1] ^ w2[1]) & ((1ULL << ((offset - 15) << 2)) - 1)) == 0);
+            return is_prefix_slow(full);
+        }
         if (__builtin_expect(offset < 15, 1)) {
             uint64_t mask = (1ULL << ((offset + 1) << 2)) - 1;
-            return ((w1[0] ^ w2[0]) & mask) == 0;
+            return (diff0 & mask) == 0;
         }
-        if (offset == 15) {
-            return w1[0] == w2[0];
-        }
-        if (__builtin_expect(offset < 31, 1)) {
-            if (w1[0] != w2[0]) return false;
-            uint64_t mask = (1ULL << ((offset - 15) << 2)) - 1;
-            return ((w1[1] ^ w2[1]) & mask) == 0;
-        }
-        if (offset == 31) {
-            return w1[0] == w2[0] && w1[1] == w2[1];
-        }
-        return is_prefix_slow(full);
+        return false;
     }
 
     inline bool is_identical(const os_label &rhs) const {
@@ -106,27 +104,24 @@ struct os_label {
             return false;
         const uint64_t *w1 = reinterpret_cast<const uint64_t *>(data);
         const uint64_t *w2 = reinterpret_cast<const uint64_t *>(rhs.data);
+        uint64_t diff0 = w1[0] ^ w2[0];
+        if (__builtin_expect(diff0 == 0, 1)) {
+            if (__builtin_expect(offset <= 15, 1))
+                return true;
+            if (offset <= 31)
+                return w1[1] == w2[1] || (((w1[1] ^ w2[1]) & ((1ULL << ((offset - 15) << 2)) - 1)) == 0);
+            return is_identical_slow(rhs);
+        }
         if (__builtin_expect(offset < 15, 1)) {
             uint64_t mask = (1ULL << ((offset + 1) << 2)) - 1;
-            return ((w1[0] ^ w2[0]) & mask) == 0;
+            return (diff0 & mask) == 0;
         }
-        if (offset == 15) {
-            return w1[0] == w2[0];
-        }
-        if (__builtin_expect(offset < 31, 1)) {
-            if (w1[0] != w2[0]) return false;
-            uint64_t mask = (1ULL << ((offset - 15) << 2)) - 1;
-            return ((w1[1] ^ w2[1]) & mask) == 0;
-        }
-        if (offset == 31) {
-            return w1[0] == w2[0] && w1[1] == w2[1];
-        }
-        return is_identical_slow(rhs);
+        return false;
     }
 
     void copy_from(const os_label &src) {
         offset = src.offset;
-        if (__builtin_expect(src.offset < 15, 1)) {
+        if (__builtin_expect(src.offset <= 15, 1)) {
             *reinterpret_cast<uint64_t *>(data) =
                 *reinterpret_cast<const uint64_t *>(src.data);
             return;
@@ -188,7 +183,7 @@ struct os_label {
     bool is_empty() const { return is_unraceable(); }
     void clear() {
         offset = 0;
-        data[0] = 0;
+        *reinterpret_cast<uint64_t *>(data) = 0;
     }
 
     void append_left_child() {
@@ -197,11 +192,8 @@ struct os_label {
             exit(EXIT_FAILURE);
         }
         offset++;
-        if ((offset & 1) == 0) {
-            data[offset >> 1] &= 0xF0;
-        } else {
-            data[offset >> 1] &= 0x0F;
-        }
+        uint8_t clear_mask = (offset & 1) ? 0x0F : 0xF0;
+        data[offset >> 1] &= clear_mask;
     }
 
     void append_right_child() {
@@ -210,11 +202,9 @@ struct os_label {
             exit(EXIT_FAILURE);
         }
         offset++;
-        if ((offset & 1) == 0) {
-            data[offset >> 1] = (data[offset >> 1] & 0xF0) | 0x01;
-        } else {
-            data[offset >> 1] = (data[offset >> 1] & 0x0F) | 0x10;
-        }
+        uint8_t clear_mask = (offset & 1) ? 0x0F : 0xF0;
+        uint8_t set_val = (offset & 1) ? 0x10 : 0x01;
+        data[offset >> 1] = (data[offset >> 1] & clear_mask) | set_val;
     }
 
     void restore_on_sync(uint8_t conts);
@@ -288,6 +278,11 @@ struct os_label {
     }
 #endif
 };
+
+static_assert(sizeof(os_label) == 56, "os_label must be 56 bytes");
+static_assert(alignof(os_label) == 8, "os_label must be 8-byte aligned");
+static_assert(__builtin_offsetof(os_label, data) == 0, "os_label::data must be at offset 0");
+static_assert(__builtin_offsetof(os_label, offset) == 48, "os_label::offset must be at offset 48");
 
 #pragma GCC visibility pop
 

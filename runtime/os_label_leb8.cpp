@@ -4,6 +4,20 @@ void os_label::restore_on_sync(uint8_t conts) {
     if (conts == 0)
         return;
 
+    // Fast-path: most syncs drop exactly 1 single-block child level into a single-block parent level with payload <= 5
+    if (__builtin_expect(conts == 1, 1)) {
+        if (offset > 0 && (get_block(offset) & 8) == 0) {
+            uint8_t parent_blk = get_block(offset - 1);
+            if ((parent_blk & 8) == 0 && (parent_blk & 7) <= 5) {
+                if (offset == 1 || (get_block(offset - 2) & 8) == 0) {
+                    offset--;
+                    set_block(offset, parent_blk + 2);
+                    return;
+                }
+            }
+        }
+    }
+
     // Drop 'conts' levels (the children)
     while (conts > 0 && offset > 0) {
         // Check current block

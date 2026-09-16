@@ -19,7 +19,7 @@ class atomic_seqlock {
 
 #else
 
-class atomic_seqlock {
+class alignas(4) atomic_seqlock {
     // We store a has_writer boolean in the low-order bit
     std::atomic<uint32_t> seq{0};
 
@@ -49,18 +49,16 @@ class atomic_seqlock {
     }
 
     inline uint32_t begin_read() {
-        // This is a weak operation; so, we can read with just atomicity
-        uint32_t ret = seq.load(std::memory_order_relaxed);
+        // Direct acquire load (ldar on AArch64) establishes acquire semantics without separate fence
+        uint32_t ret = seq.load(std::memory_order_acquire);
         while (__builtin_expect(ret & 1, 0)) {
             #if defined(__aarch64__)
             __builtin_arm_yield();
             #elif defined(__x86_64__) || defined(__i386__)
             __builtin_ia32_pause();
             #endif
-            ret = seq.load(std::memory_order_relaxed);
+            ret = seq.load(std::memory_order_acquire);
         }
-        // and declare that we've acquired a resource (barrier)
-        std::atomic_thread_fence(std::memory_order_acquire);
         return ret;
     }
 
@@ -71,6 +69,9 @@ class atomic_seqlock {
         return seq.load(std::memory_order_relaxed) == old_seq; 
     }
 };
+
+static_assert(sizeof(atomic_seqlock) == 4, "atomic_seqlock must be 4 bytes");
+static_assert(alignof(atomic_seqlock) == 4, "atomic_seqlock must be 4-byte aligned");
 
 #endif // !SERIAL_TOOL
 
