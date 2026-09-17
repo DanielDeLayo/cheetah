@@ -29,18 +29,41 @@ struct os_label {
 
   unsigned lca(const os_label& other) {
     unsigned last_idx = std::min(other.end_idx, end_idx);
-    unsigned full_words = last_idx / 64;
 
-    unsigned match_bits = 0;
-    for (unsigned i = 0; i < full_words; i++) {
-      if (data[i] != other.data[i]) {
-        return match_bits + __builtin_ctzll(data[i] ^ other.data[i]);
-      }
-      match_bits += 64;
+    constexpr int vec_len = 2;
+    using block_t = uint64_t __attribute__((ext_vector_type(vec_len)));
+    using mask_t = bool __attribute__((ext_vector_type(vec_len)));
+    uint64_t full_blocks = last_idx / (8 * sizeof(block_t));
+    uint64_t final_block_idx = last_idx % (8 * sizeof(block_t));
+
+    if (__builtin_expect(full_blocks == 0, 1)) {
+      unsigned cmp_msk;
+      *(mask_t*)&cmp_msk = __builtin_convertvector(
+          ((const block_t*)data)[0] != ((const block_t*)other.data)[0], mask_t);
+      cmp_msk |= 1ull << (final_block_idx / 64);
+      unsigned firstdiff = __builtin_ctzll(cmp_msk);
+      uint64_t cmp_bits = (data[firstdiff] ^ other.data[firstdiff]);
+      cmp_bits |= 1ull << (final_block_idx % 64);
+      return 64 * firstdiff + __builtin_ctzll(cmp_bits);
     }
 
-    unsigned remain_bits = last_idx % 64;
-    return match_bits + __builtin_ctzll((data[full_words] ^ other.data[full_words]) | (1ull << remain_bits));
+    for (unsigned i = 0; i <= full_blocks; i++) {
+      unsigned cmp_msk;
+      *(mask_t*)&cmp_msk = __builtin_convertvector(
+          ((const block_t*)data)[i] != ((const block_t*)other.data)[i], mask_t);
+      if (i == full_blocks) {
+        cmp_msk |= 1ull << (final_block_idx / 64);
+      }
+      if (cmp_msk) {
+        unsigned firstdiff = i * vec_len + __builtin_ctzll(cmp_msk);
+        uint64_t cmp_bits = (data[firstdiff] ^ other.data[firstdiff]);
+        if (i == full_blocks) {
+          cmp_bits |= 1ull << (final_block_idx % 64);
+        }
+        return 64 * firstdiff + __builtin_ctzll(cmp_bits);
+      }
+    }
+    __builtin_unreachable();
   }
 };
 #pragma pack(pop)
