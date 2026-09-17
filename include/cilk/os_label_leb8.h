@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <ostream>
+#include <vector>
 
 #pragma pack(push, 2)
 struct os_label {
@@ -41,6 +42,17 @@ struct os_label {
 
     unsigned remain_bits = last_idx % 64;
     return match_bits + __builtin_ctzll((data[full_words] ^ other.data[full_words]) | (1ull << remain_bits));
+  }
+
+  std::vector<uint8_t> to_vector() const {
+    std::vector<uint8_t> vec;
+    size_t num_bytes = (end_idx + 7) / 8;
+    if (num_bytes == 0) num_bytes = 1;
+    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(data);
+    for (size_t i = 0; i < num_bytes; ++i) {
+      vec.push_back(bytes[i]);
+    }
+    return vec;
   }
 };
 #pragma pack(pop)

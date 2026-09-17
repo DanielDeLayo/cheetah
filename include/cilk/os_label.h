@@ -27,42 +27,8 @@ class alignas(64) shadow_label {
 
     */
 
-    __attribute__((noinline))
-    bool does_read_race(const os_label &reader) {
-        unsigned lca_depth = active_reader.lca(reader);
-        if (lca_depth > write_depth) {
-            write_depth = lca_depth;
-        }
-        if (write_depth % 4 == 3) {
-            return true;
-        }
-        if (lca_depth % 4 != 3) {
-            active_reader = reader;
-        } else {
-            // Technically unnecessary for one-worker execution, but could help
-            // prune later lca calls
-            active_reader.end_idx = lca_depth;
-        }
-        return false;
-    }
-
-    __attribute__((noinline))
-    bool does_write_race(const os_label &writer) {
-        unsigned lca_depth = active_reader.lca(writer);
-        if (lca_depth > write_depth) {
-            write_depth = lca_depth;
-        }
-        if (write_depth % 4 == 3) {
-            return true;
-        }
-        if (lca_depth % 4 != 3) {
-            active_reader = writer;
-            write_depth = writer.end_idx;
-        } else {
-            return true;
-        }
-        return false;
-    }
+    bool does_read_race(const os_label &reader);
+    bool does_write_race(const os_label &writer);
 
 #ifdef ENABLE_LABEL_PRINTING
     inline friend std::ostream &operator<<(std::ostream &os,
