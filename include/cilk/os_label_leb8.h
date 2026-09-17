@@ -46,12 +46,39 @@ struct os_label {
 
   std::vector<uint8_t> to_vector() const {
     std::vector<uint8_t> vec;
-    size_t num_bytes = (end_idx + 7) / 8;
-    if (num_bytes == 0) num_bytes = 1;
-    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(data);
-    for (size_t i = 0; i < num_bytes; ++i) {
-      vec.push_back(bytes[i]);
+    auto get_nibble = [&](size_t idx) -> uint8_t {
+      if (idx >= 7 * 16) return 0;
+      return (data[idx / 16] >> ((idx % 16) * 4)) & 0xF;
+    };
+
+    size_t curr_nibble = 0;
+    uint8_t n0 = get_nibble(curr_nibble);
+    uint8_t s0 = n0 & 0x7;
+    vec.push_back(s0 * 2);
+
+    while (true) {
+      uint8_t n = get_nibble(curr_nibble);
+      bool has_carry = (n & 0x4) != 0;
+      size_t p_nibble = has_carry ? (curr_nibble + 1) : curr_nibble;
+      size_t p_bit_idx = p_nibble * 4 + 3;
+      size_t next_level_nibble = p_nibble + 1;
+
+      if (p_bit_idx >= end_idx) {
+        break;
+      }
+
+      uint8_t next_n = get_nibble(next_level_nibble);
+      uint8_t s_curr = next_n & 0x7;
+      if (s_curr > 0) {
+        vec.push_back(s_curr * 2 + 1);
+      } else {
+        bool is_continuation = (get_nibble(p_nibble) & 0x8) != 0;
+        vec.push_back(is_continuation ? 0 : 1);
+      }
+
+      curr_nibble = next_level_nibble;
     }
+
     return vec;
   }
 };
