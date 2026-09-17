@@ -1,7 +1,7 @@
 #ifndef _CILK_API_H
 #define _CILK_API_H
 
-#include "os_label.h"
+#include "os_label_leb8.h"
 #include <stddef.h> /* size_t */
 
 #ifdef __cplusplus
