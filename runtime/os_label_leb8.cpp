@@ -1,11 +1,81 @@
 #include <cilk/os_label.h>
 
-void os_label::restore_on_sync(uint16_t restore_point) {
-    if (offset == restore_point && offset == 0 && get_block(0) == 0)
+void os_label::restore_on_sync(uint8_t conts) {
+    if (conts == 0)
         return;
 
-    // Reset offset directly to restore_point
-    offset = restore_point;
+    // Fast-path: most syncs drop exactly 1 single-block child level into a single-block parent level with payload <= 5
+    if (__builtin_expect(conts == 1, 1)) {
+        if (offset > 0 && (get_block(offset) & 8) == 0) {
+            uint8_t parent_blk = get_block(offset - 1);
+            if ((parent_blk & 8) == 0 && (parent_blk & 7) <= 5) {
+                if (offset == 1 || (get_block(offset - 2) & 8) == 0) {
+                    offset--;
+                    set_block(offset, parent_blk + 2);
+                    return;
+                }
+            }
+        }
+    }
+
+    // Drop 'conts' levels (the children)
+    while (conts > 0 && offset > 0) {
+        // Check current block
+        if ((get_block(offset) & 8) == 0) {
+            conts--;
+        }
+        offset--;
+        if (conts == 0)
+            break;
+
+        // Align to byte boundary
+        if ((offset & 1) == 0) {
+            if ((get_block(offset) & 8) == 0) {
+                conts--;
+            }
+            if (offset == 0)
+                break;
+            offset--;
+        }
+
+        // Scan 8-byte chunks backwards
+        while (conts > 0 && offset >= 15) {
+            size_t chunk_start_byte = (offset >> 1) - 7;
+            uint64_t chunk = *reinterpret_cast<const uint64_t *>(
+                &data[chunk_start_byte]);
+            // Count zeros in bit 3 and bit 7 positions
+            uint64_t not_C = ~chunk & 0x8888888888888888ULL;
+            int zeros = __builtin_popcountll(not_C);
+
+            if (zeros < conts) {
+                conts -= zeros;
+                if (offset < 16) {
+                    offset = 0;
+                    break;
+                }
+                offset -= 16;
+            } else {
+                // It's in this chunk, find exactly where
+                break;
+            }
+        }
+
+        // Revert to byte-by-byte or block-by-block to finish the last few
+        while (conts > 0 && offset > 0) {
+            if ((get_block(offset) & 8) == 0) {
+                conts--;
+            }
+            offset--;
+        }
+    }
+
+    // At this point, we've dropped the C=0 blocks of 'conts' levels.
+    // But offset might be pointing to a C=1 block that belongs to the last
+    // dropped level! We must drop all C=1 blocks until we hit the C=0 block
+    // of the remaining parent level.
+    while (offset > 0 && (get_block(offset) & 8) != 0) {
+        offset--;
+    }
 
     // Find the start block of the parent (now the last level)
     size_t parent_start = find_level_start(offset);
@@ -36,6 +106,7 @@ void os_label::restore_on_sync(uint16_t restore_point) {
         set_block(offset, carry);
     }
 }
+
 
 bool os_label::is_identical_slow(const os_label &rhs) const {
     size_t min_blocks = offset + 1;

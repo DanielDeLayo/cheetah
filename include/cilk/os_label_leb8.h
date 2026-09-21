@@ -177,7 +177,7 @@ struct alignas(8) os_label {
     }
 
   public:
-    bool is_unraceable() const { return offset <= 1; }
+    bool is_unraceable() const { return offset == 0 && data[0] == 0; }
     bool is_empty() const { return is_unraceable(); }
     void clear() {
         offset = 0;
@@ -209,7 +209,7 @@ struct alignas(8) os_label {
         return offset;
     }
 
-    void restore_on_sync(uint16_t restore_point);
+    void restore_on_sync(uint8_t conts);
 
     // Returns true if in parallel
     bool is_parallel(const os_label &rhs) const {
