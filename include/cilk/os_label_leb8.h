@@ -20,8 +20,7 @@ struct alignas(8) os_label {
     // LEB8 encoded bit array. Each byte holds two 4-bit blocks.
     // Block format: [C (1 bit), P (3 bits)] where C is continuation.
     uint8_t data[48] = {0};
-    uint8_t offset =
-        0; // Index of the last block. 0-initialized means 1 block at index 0.
+    uint8_t offset = 0; // Index of the last block. 0-initialized means 1 block at index 0.
     uint8_t _pad[7] = {0};
 
     static constexpr size_t max_blocks = sizeof(data) * 2;
@@ -74,7 +73,6 @@ struct alignas(8) os_label {
         return min_blocks;
     }
 
-    __attribute__((noinline, cold, preserve_most))
     bool is_identical_slow(const os_label &rhs) const;
 
     bool is_prefix_slow(const os_label &full) const;
@@ -207,7 +205,11 @@ struct alignas(8) os_label {
         data[offset >> 1] = (data[offset >> 1] & clear_mask) | set_val;
     }
 
-    void restore_on_sync(uint8_t conts);
+    uint16_t get_restore_point() const {
+        return offset;
+    }
+
+    void restore_on_sync(uint16_t restore_point);
 
     // Returns true if in parallel
     bool is_parallel(const os_label &rhs) const {

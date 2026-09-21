@@ -14,7 +14,8 @@ __pedigree_frame root_frame = {.pedigree = {.rank = 0, .parent = nullptr},
                                .rank = 0,
                                .dprng_dotproduct = 0,
                                .dprng_depth = 0,
-                               .label = {}};
+                               .label = {},
+                               .restore_idx = 0};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialization and deinitialization
@@ -88,13 +89,14 @@ __CILKRTS_STRAND_PURE
 const os_label *__cilkrts_get_current_os_label(void) noexcept __CILKRTS_PRESERVE_MOST {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
     if (__builtin_expect(!w || !w->extension, 0))
-        return nullptr;
+        return &(root_frame.label);
     return &((__pedigree_frame *)w->extension)->label;
 }
 
 // Get the current os_label, in the form of a pointer to its leaf node.
 __cilkrts_os_label __cilkrts_get_os_label(void) noexcept {
-    return __cilkrts_os_label{.label = const_cast<os_label *>(__cilkrts_get_current_os_label()),
+    __pedigree_frame *frame = (__pedigree_frame *)(__cilkrts_get_extension());
+    return __cilkrts_os_label{.label = frame ? &(frame->label) : &(root_frame.label),
                               .parent = nullptr};
 }
 

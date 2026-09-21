@@ -58,8 +58,17 @@ if (CHEETAH_HAS_FOMIT_FRAME_POINTER_FLAG)
   set_source_files_properties(invoke-main.c PROPERTIES COMPILE_FLAGS -fno-omit-frame-pointer)
 endif()
 
+# OS label implementation options
+set(CHEETAH_LABEL_IMPL "leb8-single" CACHE STRING "OS label implementation for Cheetah (leb8-single, leb8-range, or string)")
+set_property(CACHE CHEETAH_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range" "string")
+
 # Add definitions for cheetah build
 list(APPEND CHEETAH_COMPILE_DEFS OPENCILK_LIBRARY)
+if (CHEETAH_LABEL_IMPL STREQUAL "leb8-range")
+  list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_LEB8_RANGE=1")
+elseif (CHEETAH_LABEL_IMPL STREQUAL "string")
+  list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_STRING=1")
+endif()
 
 # Set optimization levels for Debug and Release builds
 set(CHEETAH_DEBUG_OPTIONS -Og)

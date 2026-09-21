@@ -102,11 +102,11 @@ struct os_label {
         labels[++offset] = 1;
     }
 
-    // This is always called with the parent's frame. We only have to undo
-    // conts. But there's a problem because this is called without a promise
-    // that it's real. Just the keyword. 
-    // We have to reset and store conts every time we enter a new cilked function that may spawn.
-    void restore_on_sync(uint8_t conts);
+    uint16_t get_restore_point() const {
+        return offset;
+    }
+
+    void restore_on_sync(uint16_t restore_point);
 
     size_t inline calc_matching_prefix_length(const os_label &rhs) const {
         size_t min_offset = offset < rhs.offset ? offset : rhs.offset;

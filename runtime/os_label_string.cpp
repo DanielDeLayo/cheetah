@@ -1,10 +1,7 @@
 #include <cilk/os_label.h>
 
-void os_label::restore_on_sync(uint8_t conts) {
-    if (conts == 0)
-        return;
-    // Clear left child
-    for (; conts > 0; conts--)
+void os_label::restore_on_sync(uint16_t restore_point) {
+    while (offset > restore_point)
         labels[offset--] = 0;
     // Increment Parent
     check_label_value_overflow(labels[offset], 2, UINT8_MAX);

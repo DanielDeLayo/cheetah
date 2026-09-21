@@ -39,8 +39,9 @@ void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
 
     // Update the labels in the parent and child frames.
     frame->label = parent_frame->label;
-    frame->label.append_right_child();
-    parent_frame->label.append_left_child();
+    frame->label.append_left_child();
+    frame->restore_idx = frame->label.get_restore_point();
+    parent_frame->label.append_right_child();
     
     // Increment the conts counter in the parent's stack frame!
     if (parent_sf) {
@@ -63,13 +64,10 @@ void __cilkrts_restore_os_label_on_sync(void) noexcept {
     // The current stack frame is the one performing the sync
     cilk_fiber *fh = __cilkrts_tls.fh;
     __cilkrts_stack_frame *sync_sf = fh->current_stack_frame;
-    uint8_t conts = __cilkrts_get_conts(sync_sf);
-    
     __pedigree_frame *frame = (__pedigree_frame *)(__cilkrts_get_extension());
     if (!frame) return;
-    
-    // Restore using only the spawns issued by this exact function
-    frame->label.restore_on_sync(conts);
+
+    frame->label.restore_on_sync(frame->restore_idx);
     
     // Reset conts to 0 so subsequent syncs in the same function don't underflow the offset!
     __cilkrts_set_conts(sync_sf, 0);

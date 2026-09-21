@@ -3,8 +3,8 @@ set(cilk_header_files
   cilk/cilk_api.h
   cilk/os_label.h
   cilk/os_label_leb8.h
+  cilk/os_label_leb8_single.h
   cilk/os_label_string.h
-  cilk/atomic_seqlock.h
   cilk/cilk_stub.h
   cilk/holder
   cilk/opadd_reducer

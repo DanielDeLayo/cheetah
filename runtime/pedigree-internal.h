@@ -16,6 +16,7 @@ typedef struct __pedigree_frame {
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
     os_label label;
+    uint16_t restore_idx;
 } __pedigree_frame;
 
 ///////////////////////////////////////////////////////////////////////////
