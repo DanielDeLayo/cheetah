@@ -22,6 +22,15 @@
 #define CILKPRACE_ABL_READ_WIDEN_FASTPATH 1
 #endif
 
+// Same-reader short-circuit in does_read_race_slow, which lets a read whose
+// label equals active_reader skip the write lock. Guarded by write_depth so the
+// locked path provably has nothing to report and nothing to update -- see the
+// comment in leb8-single.cpp. Off: those reads take the write lock and redo the
+// test there.
+#ifndef CILKPRACE_ABL_READ_SLOW_IDENTICAL
+#define CILKPRACE_ABL_READ_SLOW_IDENTICAL 1
+#endif
+
 // Optimistic same-writer check at the top of does_write_race. Off: every write
 // calls does_write_race_slow.
 #ifndef CILKPRACE_ABL_WRITE_FASTPATH
