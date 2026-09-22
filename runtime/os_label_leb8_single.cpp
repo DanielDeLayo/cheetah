@@ -74,47 +74,106 @@ void os_label::restore_on_sync(uint16_t restore_idx) {
   end_idx = restore_idx;
 }
 
+uint16_t os_label::get_restore_point() const {
+  return end_idx;
+}
+
 bool os_label::is_identical(const os_label &other) const {
   if (end_idx != other.end_idx)
     return false;
-  unsigned words = (end_idx + 63) / 64;
-  for (unsigned i = 0; i < words; ++i) {
+#if !CILKPRACE_ABL_LABEL_CMP_FASTPATH
+  // Generic word loop, no width specialization.
+  {
+    unsigned full_words = end_idx / 64;
+    for (unsigned i = 0; i < full_words; ++i) {
+      if (data[i] != other.data[i])
+        return false;
+    }
+    unsigned remain = end_idx % 64;
+    if (remain != 0) {
+      uint64_t mask = (1ULL << remain) - 1;
+      return ((data[full_words] ^ other.data[full_words]) & mask) == 0;
+    }
+    return true;
+  }
+#else
+  if (end_idx <= 64) {
+    uint64_t mask = (end_idx == 64) ? ~0ULL : ((1ULL << end_idx) - 1);
+    return ((data[0] ^ other.data[0]) & mask) == 0;
+  }
+  if (data[0] != other.data[0])
+    return false;
+  if (end_idx <= 128) {
+    uint64_t mask = (end_idx == 128) ? ~0ULL : ((1ULL << (end_idx - 64)) - 1);
+    return ((data[1] ^ other.data[1]) & mask) == 0;
+  }
+  if (data[1] != other.data[1])
+    return false;
+  unsigned full_words = end_idx / 64;
+  for (unsigned i = 2; i < full_words; ++i) {
     if (data[i] != other.data[i])
       return false;
   }
+  unsigned remain = end_idx % 64;
+  if (remain != 0) {
+    uint64_t mask = (1ULL << remain) - 1;
+    return ((data[full_words] ^ other.data[full_words]) & mask) == 0;
+  }
   return true;
+#endif
 }
 
 unsigned os_label::lca(const os_label &other) const {
-  unsigned last_idx = std::min(other.end_idx, end_idx);
-  if (__builtin_expect(last_idx <= 64, 1)) {
-    uint64_t diff = data[0] ^ other.data[0];
-    if (diff != 0) {
-      unsigned ctz = __builtin_ctzll(diff);
-      return ctz < last_idx ? ctz : last_idx;
+  unsigned last_idx = other.end_idx < end_idx ? other.end_idx : end_idx;
+#if !CILKPRACE_ABL_LABEL_CMP_FASTPATH
+  // Generic word loop, no width specialization.
+  {
+    unsigned full_words = last_idx / 64;
+    for (unsigned i = 0; i < full_words; ++i) {
+      if (data[i] != other.data[i])
+        return i * 64 + __builtin_ctzll(data[i] ^ other.data[i]);
     }
-    return last_idx;
+    unsigned remain_bits = last_idx % 64;
+    if (remain_bits == 0)
+      return last_idx;
+    return full_words * 64 +
+           __builtin_ctzll((data[full_words] ^ other.data[full_words]) |
+                           (1ull << remain_bits));
   }
-
+#else
+  if (last_idx < 64) {
+    uint64_t diff = (data[0] ^ other.data[0]) | (1ull << last_idx);
+    return __builtin_ctzll(diff);
+  }
+  if (data[0] != other.data[0]) {
+    return __builtin_ctzll(data[0] ^ other.data[0]);
+  }
+  if (last_idx == 64) return 64;
+  if (last_idx < 128) {
+    uint64_t diff = (data[1] ^ other.data[1]) | (1ull << (last_idx - 64));
+    return 64 + __builtin_ctzll(diff);
+  }
+  if (data[1] != other.data[1]) {
+    return 64 + __builtin_ctzll(data[1] ^ other.data[1]);
+  }
+  if (last_idx == 128) return 128;
   unsigned full_words = last_idx / 64;
-  unsigned match_bits = 0;
-  for (unsigned i = 0; i < full_words; i++) {
+  for (unsigned i = 2; i < full_words; i++) {
     if (data[i] != other.data[i]) {
-      return match_bits + __builtin_ctzll(data[i] ^ other.data[i]);
+      return i * 64 + __builtin_ctzll(data[i] ^ other.data[i]);
     }
-    match_bits += 64;
   }
-
   unsigned remain_bits = last_idx % 64;
-  return match_bits +
+  return full_words * 64 +
          __builtin_ctzll((data[full_words] ^ other.data[full_words]) |
                          (1ull << remain_bits));
+#endif
 }
 
 std::vector<uint8_t> os_label::to_vector() const {
   std::vector<uint8_t> vec;
   auto get_nibble = [&](size_t idx) -> uint8_t {
-    if (idx >= 7 * 16)
+    if (idx >= 6 * 16)
       return 0;
     return (data[idx / 16] >> ((idx % 16) * 4)) & 0xF;
   };
@@ -152,7 +211,7 @@ std::vector<uint8_t> os_label::to_vector() const {
 
 #ifdef ENABLE_LABEL_PRINTING
 std::ostream &operator<<(std::ostream &os, const os_label &l) {
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 6; i++) {
     os << std::hex << std::setw(16) << std::setfill('0') << l.data[i] << " ";
   }
   os << ": " << l.end_idx;

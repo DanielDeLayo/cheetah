@@ -1,6 +1,8 @@
 set(cilk_header_files
   cilk/cilk.h
   cilk/cilk_api.h
+  cilk/cilkprace_ablation.h
+  cilk/cilkprace_ablation_config.h
   cilk/os_label.h
   cilk/os_label_leb8.h
   cilk/os_label_leb8_single.h
