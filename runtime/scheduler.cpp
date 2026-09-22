@@ -42,7 +42,7 @@ struct __cilkrts_status __cilkrts_status = {
   .use_extension = false
 };
 
-thread_local struct __cilkrts_tls __cilkrts_tls = {
+constinit thread_local struct __cilkrts_tls __cilkrts_tls = {
   
   // TLS pointer to the current worker structure.
   .worker = &default_worker,

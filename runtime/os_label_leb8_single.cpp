@@ -7,6 +7,24 @@
 #include <iomanip>
 #include <ostream>
 
+// Label-capacity checks. These sit on spawn/sync paths, not per-access, so they
+// are always compiled in: the old asserts vanished under NDEBUG and a label that
+// overruns data[] silently corrupts end_idx and, inside shadow_label, write_depth
+// and the seqlock -- i.e. it turns into wrong race verdicts rather than a crash.
+#define CILKPRACE_LABEL_CHECK(cond, ...)                                       \
+  do {                                                                         \
+    if (__builtin_expect(!(cond), 0)) {                                        \
+      fprintf(stderr, "cilkprace: label overflow: ");                          \
+      fprintf(stderr, __VA_ARGS__);                                            \
+      fprintf(stderr,                                                          \
+              "\n  capacity %zu bits (CILKPRACE_LABEL_WORDS=%d). Note the "    \
+              "limit is spawns per sync region, not nesting depth: each spawn " \
+              "in a frame advances the label 4 bits until its sync.\n",        \
+              sizeof(data) * 8, CILKPRACE_LABEL_WORDS);                        \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+
 void os_label::append_left_child() {
   int scan_low_offset_bytes = end_idx / 8;
 
@@ -24,16 +42,8 @@ void os_label::append_left_child() {
   int high_set_idx = 63 - __builtin_clzll(scan_val_capped);
   end_idx = ((high_set_idx + 2) | 3) + 1 + scan_low_offset_bytes * 8;
 
-  // Always checked, not an assert: this is per-spawn, not per-access, and
-  // silently overflowing the label corrupts every later race verdict.
-  if (__builtin_expect(end_idx > sizeof(data) * 8, 0)) {
-    fprintf(stderr,
-            "cilkprace: spawn nesting exceeded the label width "
-            "(depth %u bits > capacity %zu bits). Rebuild with a larger "
-            "CILKPRACE_LABEL_WORDS (currently %d).\n",
-            (unsigned)end_idx, sizeof(data) * 8, CILKPRACE_LABEL_WORDS);
-    abort();
-  }
+  CILKPRACE_LABEL_CHECK(end_idx <= sizeof(data) * 8,
+                        "spawn advanced label to %u bits", (unsigned)end_idx);
 }
 
 void os_label::append_right_child() {
@@ -41,10 +51,14 @@ void os_label::append_right_child() {
   assert(end_idx % 4 == 0);
   assert(end_idx > 0);
   uint64_t p_idx = end_idx - 1;
+  CILKPRACE_LABEL_CHECK(p_idx / 64ull < CILKPRACE_LABEL_WORDS,
+                        "P-bit write at word %llu", (unsigned long long)(p_idx / 64ull));
   data[p_idx / 64ull] |= 1ull << (p_idx % 64ull);
 }
 
 void os_label::restore_on_sync(uint16_t restore_idx) {
+  CILKPRACE_LABEL_CHECK(restore_idx <= sizeof(data) * 8,
+                        "sync restore point %u bits", (unsigned)restore_idx);
   int scan_low_offset_bytes = restore_idx / 8;
 
   if (scan_low_offset_bytes > scan_max_low_offset_bytes) {
@@ -53,7 +67,8 @@ void os_label::restore_on_sync(uint16_t restore_idx) {
 
   uint64_t *scan_low_addr = (uint64_t *)((uint8_t *)data + scan_low_offset_bytes);
   uint64_t scan_low_idx = restore_idx - scan_low_offset_bytes * 8;
-  assert(scan_low_idx < 64);
+  CILKPRACE_LABEL_CHECK(scan_low_idx < 64,
+                        "sync scan offset %llu bits", (unsigned long long)scan_low_idx);
   assert(scan_low_idx % 4 == 0);
 
   uint64_t scan_val = *scan_low_addr;

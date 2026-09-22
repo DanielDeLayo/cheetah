@@ -60,7 +60,12 @@ struct __cilkrts_tls {
     cilk_fiber *fh;
 };
 
-extern thread_local struct __cilkrts_tls __cilkrts_tls;
+// constinit is load-bearing, not documentation: without it every access from
+// another TU goes through the _ZTW thread-local wrapper, which on Darwin is a
+// whole extra call frame wrapped around the mandatory tlv_get_addr call.
+// __cilkrts_get_current_os_label() is on the race detector's hot path, where
+// that wrapper measured ~20-24% of total runtime.
+extern constinit thread_local struct __cilkrts_tls __cilkrts_tls;
 
 static inline __attribute__((always_inline,nothrow)) __cilkrts_worker *
 __cilkrts_get_tls_worker(void) {
