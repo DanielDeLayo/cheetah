@@ -4,6 +4,14 @@
 #pragma GCC visibility push(default)
 
 #include "cilkprace_ablation.h"
+
+// Width of the label, in 64-bit words. Each nesting level costs 4 bits, so W
+// words allow 16*W levels of spawn nesting. The runtime aborts with a clear
+// message if a program exceeds it (see append_left_child), so shrinking this is
+// safe to try -- it cannot silently corrupt a label.
+#ifndef CILKPRACE_LABEL_WORDS
+#define CILKPRACE_LABEL_WORDS 6
+#endif
 #include <cstdint>
 #include <ostream>
 #include <vector>
@@ -25,7 +33,7 @@ struct alignas(8) os_label {
   // Differentiating between an unused P bit vs a l/r child P bit is not
   // possible, so instead of popping a continuation, we use the parent's label
   // as reference
-  uint64_t data[6] = {};
+  uint64_t data[CILKPRACE_LABEL_WORDS] = {};
   uint16_t end_idx = 0;
   uint8_t _pad[6] = {};
 
@@ -41,7 +49,8 @@ struct alignas(8) os_label {
   std::vector<uint8_t> to_vector() const;
 };
 
-static_assert(sizeof(os_label) == 56, "os_label must be 56 bytes");
+static_assert(sizeof(os_label) == CILKPRACE_LABEL_WORDS * 8 + 8,
+              "os_label must be CILKPRACE_LABEL_WORDS words + end_idx + padding");
 static_assert(alignof(os_label) == 8, "os_label must be 8-byte aligned");
 
 #ifdef ENABLE_LABEL_PRINTING

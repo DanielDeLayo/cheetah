@@ -62,8 +62,14 @@ endif()
 set(CHEETAH_LABEL_IMPL "leb8-single" CACHE STRING "OS label implementation for Cheetah (leb8-single, leb8-range, or string)")
 set_property(CACHE CHEETAH_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range" "string")
 
+# Width of the leb8-single label in 64-bit words (16 nesting levels per word).
+# Shared with cilktools/cilkprace, which sizes shadow_label from it; the two
+# MUST agree, so it lives in one cache variable read by both sub-projects.
+set(CILKPRACE_LABEL_WORDS "6" CACHE STRING "Label width in 64-bit words for leb8-single (cheetah + cilkprace)")
+
 # Add definitions for cheetah build
 list(APPEND CHEETAH_COMPILE_DEFS OPENCILK_LIBRARY)
+list(APPEND CHEETAH_COMPILE_DEFS "CILKPRACE_LABEL_WORDS=${CILKPRACE_LABEL_WORDS}")
 if (CHEETAH_LABEL_IMPL STREQUAL "leb8-range")
   list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_LEB8_RANGE=1")
 elseif (CHEETAH_LABEL_IMPL STREQUAL "string")

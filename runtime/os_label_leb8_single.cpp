@@ -1,6 +1,8 @@
 #include <cilk/os_label.h>
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <ostream>
@@ -22,7 +24,16 @@ void os_label::append_left_child() {
   int high_set_idx = 63 - __builtin_clzll(scan_val_capped);
   end_idx = ((high_set_idx + 2) | 3) + 1 + scan_low_offset_bytes * 8;
 
-  assert(end_idx <= sizeof(data) * 8);
+  // Always checked, not an assert: this is per-spawn, not per-access, and
+  // silently overflowing the label corrupts every later race verdict.
+  if (__builtin_expect(end_idx > sizeof(data) * 8, 0)) {
+    fprintf(stderr,
+            "cilkprace: spawn nesting exceeded the label width "
+            "(depth %u bits > capacity %zu bits). Rebuild with a larger "
+            "CILKPRACE_LABEL_WORDS (currently %d).\n",
+            (unsigned)end_idx, sizeof(data) * 8, CILKPRACE_LABEL_WORDS);
+    abort();
+  }
 }
 
 void os_label::append_right_child() {
@@ -173,7 +184,7 @@ unsigned os_label::lca(const os_label &other) const {
 std::vector<uint8_t> os_label::to_vector() const {
   std::vector<uint8_t> vec;
   auto get_nibble = [&](size_t idx) -> uint8_t {
-    if (idx >= 6 * 16)
+    if (idx >= CILKPRACE_LABEL_WORDS * 16)
       return 0;
     return (data[idx / 16] >> ((idx % 16) * 4)) & 0xF;
   };
@@ -211,7 +222,7 @@ std::vector<uint8_t> os_label::to_vector() const {
 
 #ifdef ENABLE_LABEL_PRINTING
 std::ostream &operator<<(std::ostream &os, const os_label &l) {
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < CILKPRACE_LABEL_WORDS; i++) {
     os << std::hex << std::setw(16) << std::setfill('0') << l.data[i] << " ";
   }
   os << ": " << l.end_idx;
