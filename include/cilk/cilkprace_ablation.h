@@ -22,13 +22,16 @@
 #define CILKPRACE_ABL_READ_WIDEN_FASTPATH 1
 #endif
 
-// Same-reader short-circuit in does_read_race_slow, which lets a read whose
-// label equals active_reader skip the write lock. Guarded by write_depth so the
-// locked path provably has nothing to report and nothing to update -- see the
-// comment in leb8-single.cpp. Off: those reads take the write lock and redo the
-// test there.
-#ifndef CILKPRACE_ABL_READ_SLOW_IDENTICAL
-#define CILKPRACE_ABL_READ_SLOW_IDENTICAL 1
+// Same-strand re-read in does_read_race: a read whose label equals
+// active_reader, with write_depth showing no parallel write, returns without
+// leaving the inlined fast path. READ_WIDEN_FASTPATH only covers entries that
+// summarize a set of parallel readers (end_idx % 4 == 3), so without this a
+// strand re-reading its own data always went out of line just for
+// does_read_race_slow's is_identical to say "nothing to do" -- 42-97% of reads
+// on cilksort, qsort, nqueens and strassen. Off: those reads take that slow
+// path, which applies the same test.
+#ifndef CILKPRACE_ABL_READ_IDENT_FASTPATH
+#define CILKPRACE_ABL_READ_IDENT_FASTPATH 1
 #endif
 
 // Optimistic same-writer check at the top of does_write_race. Off: every write
@@ -45,19 +48,6 @@
 // CILK_NWORKERS=1 sweep. The driver refuses to run it multi-threaded.
 #ifndef CILKPRACE_ABL_SEQLOCK
 #define CILKPRACE_ABL_SEQLOCK 1
-#endif
-
-// Pack shadow_label into exactly one 64-byte cache line and align it to 64
-// bytes. Off: 8-byte alignment, so shadow entries straddle cache lines.
-#ifndef CILKPRACE_ABL_CACHE_ALIGN
-#define CILKPRACE_ABL_CACHE_ALIGN 1
-#endif
-
-// Skip instrumenting a read that the compiler proved is followed by a write to
-// the same address in the same basic block (load_prop_t::is_read_before_write_in_bb).
-// Off: those reads are checked too. Same races reported either way.
-#ifndef CILKPRACE_ABL_RBW_FILTER
-#define CILKPRACE_ABL_RBW_FILTER 1
 #endif
 
 // `#pragma unroll 2` on the per-granule loops in register_read/register_write.
