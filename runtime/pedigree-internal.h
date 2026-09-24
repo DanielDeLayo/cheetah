@@ -4,6 +4,7 @@
 #include "cilk-internal.h"
 #include <cilk/cilk_api.h>
 #include <cilk/os_label.h>
+#include <cstddef>
 #include <cstdlib>
 
 static const uint64_t DPRNG_PRIME = (uint64_t)(-59);
@@ -16,8 +17,16 @@ typedef struct __pedigree_frame {
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
     os_label label;
+    void *tool[CILKRTS_STRAND_TOOL_WORDS]; // must directly follow label
     uint16_t restore_idx;
 } __pedigree_frame;
+
+static_assert(offsetof(__pedigree_frame, tool) ==
+                  offsetof(__pedigree_frame, label) + sizeof(os_label),
+              "race detectors find the strand tool words at &label + 1");
+
+// Set by __cilkrts_set_strand_hooks; see os_label.h.
+extern "C" __cilkrts_strand_hooks_t __cilkrts_strand_hooks;
 
 ///////////////////////////////////////////////////////////////////////////
 // Helper methods

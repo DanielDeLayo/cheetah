@@ -15,6 +15,7 @@ __pedigree_frame root_frame = {.pedigree = {.rank = 0, .parent = nullptr},
                                .dprng_dotproduct = 0,
                                .dprng_depth = 0,
                                .label = {},
+                               .tool = {},
                                .restore_idx = 0};
 
 ////////////////////////////////////////////////////////////////////////////////
