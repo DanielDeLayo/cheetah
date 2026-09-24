@@ -52,10 +52,9 @@ void __cilkrts_extend_spawn(__cilkrts_worker *w, void **parent_extension,
     frame->restore_idx = frame->label.get_restore_point();
     parent_frame->label.append_right_child();
 #endif
-    for (void *&word : frame->tool)
-        word = nullptr;
-    if (__cilkrts_strand_hooks.spawn)
-        __cilkrts_strand_hooks.spawn(parent_frame->tool, frame->tool, parent_sf);
+    // Both labels changed; see tool_word in pedigree-internal.h.
+    frame->tool_word = 0;
+    parent_frame->tool_word = 0;
     
     // Increment the conts counter in the parent's stack frame!
     if (parent_sf) {
@@ -90,8 +89,7 @@ void __cilkrts_restore_os_label_on_sync(void) noexcept {
     // frame was itself spawned as a child, pointing to its own label start.
     frame->label.restore_on_sync(frame->restore_idx);
 #endif
-    if (__cilkrts_strand_hooks.sync)
-        __cilkrts_strand_hooks.sync(frame->tool, sync_sf);
+    frame->tool_word = 0; // the label changed
 
     // Reset conts to 0 so subsequent syncs in the same function don't double-apply.
     __cilkrts_set_conts(sync_sf, 0);

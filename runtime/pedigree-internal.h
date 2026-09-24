@@ -17,16 +17,16 @@ typedef struct __pedigree_frame {
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
     os_label label;
-    void *tool[CILKRTS_STRAND_TOOL_WORDS]; // must directly follow label
+    // For the race detector, which reaches it at &label + 1. Zeroed whenever
+    // the label changes, so it can cache something derived from the label
+    // (leb8-ptr keeps the label's table id here).
+    uint64_t tool_word;
     uint16_t restore_idx;
 } __pedigree_frame;
 
-static_assert(offsetof(__pedigree_frame, tool) ==
+static_assert(offsetof(__pedigree_frame, tool_word) ==
                   offsetof(__pedigree_frame, label) + sizeof(os_label),
-              "race detectors find the strand tool words at &label + 1");
-
-// Set by __cilkrts_set_strand_hooks; see os_label.h.
-extern "C" __cilkrts_strand_hooks_t __cilkrts_strand_hooks;
+              "race detectors find the tool word at &label + 1");
 
 ///////////////////////////////////////////////////////////////////////////
 // Helper methods

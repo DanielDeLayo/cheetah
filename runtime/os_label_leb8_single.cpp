@@ -81,7 +81,7 @@ void os_label::restore_on_sync(uint16_t restore_idx) {
   // Increment s value.
   uint64_t carries = scan_val & (p_mask >> 1ull);
   scan_val |= p_mask;
-  scan_val += 1 << scan_low_idx;
+  scan_val += 1ull << scan_low_idx;
   scan_val &= ~p_mask;
   scan_val |= carries;
 
