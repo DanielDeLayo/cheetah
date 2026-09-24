@@ -17,9 +17,9 @@
       fprintf(stderr, "cilkprace: label overflow: ");                          \
       fprintf(stderr, __VA_ARGS__);                                            \
       fprintf(stderr,                                                          \
-              "\n  capacity %zu bits (CILKPRACE_LABEL_WORDS=%d). Note the "    \
-              "limit is spawns per sync region, not nesting depth: each spawn " \
-              "in a frame advances the label 4 bits until its sync.\n",        \
+              "\n  capacity %zu bits (CILKPRACE_LABEL_WORDS=%d). Each spawn "  \
+              "advances the label 4 bits until its frame syncs, so the limit " \
+              "is spawn nesting depth plus spawns per sync region.\n",         \
               sizeof(data) * 8, CILKPRACE_LABEL_WORDS);                        \
       abort();                                                                 \
     }                                                                          \
@@ -36,7 +36,10 @@ void os_label::append_left_child() {
 
   uint64_t scan_val = *scan_low_addr;
   uint64_t scan_low_idx = end_idx - scan_low_offset_bytes * 8;
-  assert(scan_low_idx < 64);
+  // A full label clamps the scan window, and without this the shift below is
+  // out of range and end_idx wraps back into the last word, aliasing an
+  // ancestor's label instead of failing.
+  CILKPRACE_LABEL_CHECK(scan_low_idx < 64, "spawn at %u bits", (unsigned)end_idx);
 
   uint64_t scan_val_capped = scan_val | 1ull << scan_low_idx;
   int high_set_idx = 63 - __builtin_clzll(scan_val_capped);

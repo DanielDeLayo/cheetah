@@ -5,12 +5,14 @@
 
 #include "cilkprace_ablation.h"
 
-// Width of the label, in 64-bit words. Each nesting level costs 4 bits, so W
-// words allow 16*W levels of spawn nesting. The runtime aborts with a clear
-// message if a program exceeds it (see append_left_child), so shrinking this is
-// safe to try -- it cannot silently corrupt a label.
+// Width of the label, in 64-bit words. Each level costs 4 bits, so W words
+// allow 16*W levels, where every spawn nests one level and a frame's spawns
+// only unnest at its sync: 100 spawns in a loop before a cilk_sync take 100
+// levels. The runtime aborts with a clear message if a program exceeds it (see
+// append_left_child), so shrinking this is safe to try -- it cannot silently
+// corrupt a label.
 #ifndef CILKPRACE_LABEL_WORDS
-#define CILKPRACE_LABEL_WORDS 6
+#define CILKPRACE_LABEL_WORDS 12
 #endif
 #include <cstdint>
 #include <ostream>
