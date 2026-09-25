@@ -67,10 +67,18 @@ set_property(CACHE CHEETAH_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range
 # MUST agree, so it lives in one cache variable read by both sub-projects.
 set(CILKPRACE_LABEL_WORDS "12" CACHE STRING "Label width in 64-bit words for leb8-single (cheetah + cilkprace)")
 
+# cilkprace's shadow implementation, declared here too because leb8-ptr needs
+# the runtime's labels to be leb8-anchor (os_label_leb8_anchor.h); the race
+# detector reads them straight out of the runtime's frames, so the two must
+# agree. Defined identically in cilktools/cilkprace/CMakeLists.txt.
+set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, string, or leb8-ptr)")
+
 # Add definitions for cheetah build
 list(APPEND CHEETAH_COMPILE_DEFS OPENCILK_LIBRARY)
 list(APPEND CHEETAH_COMPILE_DEFS "CILKPRACE_LABEL_WORDS=${CILKPRACE_LABEL_WORDS}")
-if (CHEETAH_LABEL_IMPL STREQUAL "leb8-range")
+if (CILKPRACE_LABEL_IMPL STREQUAL "leb8-ptr")
+  list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_LEB8_ANCHOR=1")
+elseif (CHEETAH_LABEL_IMPL STREQUAL "leb8-range")
   list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_LEB8_RANGE=1")
 elseif (CHEETAH_LABEL_IMPL STREQUAL "string")
   list(APPEND CHEETAH_COMPILE_DEFS "USE_OS_LABEL_STRING=1")

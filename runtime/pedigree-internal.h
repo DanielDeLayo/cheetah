@@ -17,11 +17,11 @@ typedef struct __pedigree_frame {
     uint64_t dprng_dotproduct;
     int64_t dprng_depth;
     os_label label;
-    // For the race detector, which reaches it at &label + 1. Zeroed whenever
-    // the label changes, so it can cache something derived from the label
-    // (leb8-ptr keeps the label's table id here).
+    // For the race detector, which reaches it at &label + 1. Reset by
+    // fresh_tool_word whenever the label changes, so it can cache something
+    // derived from the label (leb8-ptr keeps the label's table id here).
     uint64_t tool_word;
-    uint16_t restore_idx;
+    uint32_t restore_idx;
 } __pedigree_frame;
 
 static_assert(offsetof(__pedigree_frame, tool_word) ==
@@ -30,6 +30,16 @@ static_assert(offsetof(__pedigree_frame, tool_word) ==
 
 ///////////////////////////////////////////////////////////////////////////
 // Helper methods
+
+// The tool word for a label that just changed: zero, except that leb8-anchor
+// labels mark whether they have left their window.
+static inline uint64_t fresh_tool_word([[maybe_unused]] const os_label &l) {
+#if defined(_OS_LABEL_LEB8_ANCHOR_H)
+    return l.fresh_tool_word();
+#else
+    return 0;
+#endif
+}
 
 static inline __attribute__((malloc)) __pedigree_frame *
 push_pedigree_frame(__cilkrts_worker *w) {
