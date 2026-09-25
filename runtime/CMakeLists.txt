@@ -71,7 +71,7 @@ set(CILKPRACE_LABEL_WORDS "12" CACHE STRING "Label width in 64-bit words for leb
 # the runtime's labels to be leb8-anchor (os_label_leb8_anchor.h); the race
 # detector reads them straight out of the runtime's frames, so the two must
 # agree. Defined identically in cilktools/cilkprace/CMakeLists.txt.
-set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, string, or leb8-ptr)")
+set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, string, leb8-ptr, or leb8-short-ptr)")
 
 # Add definitions for cheetah build
 list(APPEND CHEETAH_COMPILE_DEFS OPENCILK_LIBRARY)
